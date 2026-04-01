@@ -23,7 +23,6 @@ import EditGameModal from 'Game/Edit/EditGameModal';
 import { Image, Statistics } from 'Game/Game';
 import GameGenres from 'Game/GameGenres';
 import GamePoster from 'Game/GamePoster';
-import { getGameStatusDetails } from 'Game/GameStatus';
 import GameHistoryModal from 'Game/History/GameHistoryModal';
 import MonitoringOptionsModal from 'Game/MonitoringOptions/MonitoringOptionsModal';
 import useGame, { useSingleGame, useToggleGameMonitored } from 'Game/useGame';
@@ -409,7 +408,6 @@ function GameDetails({ gameId }: GameDetailsProps) {
     lastAired,
   } = statistics;
 
-  const statusDetails = getGameStatusDetails(status);
   const runningYears =
     status === 'ended' ? `${year}-${getDateYear(lastAired)}` : `${year}-`;
 
@@ -674,19 +672,7 @@ function GameDetails({ gameId }: GameDetailsProps) {
                     </div>
                   </Label>
 
-                  <Label
-                    className={styles.detailsLabel}
-                    title={statusDetails.message}
-                    size={sizes.LARGE}
-                    kind={status === 'deleted' ? kinds.INVERSE : undefined}
-                  >
-                    <div>
-                      <Icon name={statusDetails.icon} size={17} />
-                      <span className={styles.statusName}>
-                        {statusDetails.title}
-                      </span>
-                    </div>
-                  </Label>
+
 
                   {originalLanguage?.name ? (
                     <Label

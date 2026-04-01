@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using Romarr.Core.MediaCover;
 using Romarr.Core.Games;
 using Romarr.Api.V3.RomFiles;
@@ -45,11 +47,26 @@ namespace Romarr.Api.V3.Roms
 
     public static class RomResourceMapper
     {
+        private static readonly Regex TypePrefixRegex = new Regex(@"^\[(Update|DLC|Base)\]\s*", RegexOptions.Compiled);
+
         public static RomResource ToResource(this Rom model)
         {
             if (model == null)
             {
                 return null;
+            }
+
+            var title = model.Title;
+            if (!string.IsNullOrEmpty(title))
+            {
+                title = TypePrefixRegex.Replace(title, string.Empty);
+            }
+
+            var airDateUtc = model.AirDateUtc;
+            if (!airDateUtc.HasValue && !string.IsNullOrEmpty(model.AirDate) &&
+                DateTime.TryParse(model.AirDate, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed))
+            {
+                airDateUtc = parsed.ToUniversalTime();
             }
 
             return new RomResource
@@ -61,9 +78,9 @@ namespace Romarr.Api.V3.Roms
                 RomFileId = model.RomFileId,
                 PlatformNumber = model.PlatformNumber,
                 RomNumber = model.FileNumber,
-                Title = model.Title,
+                Title = title,
                 AirDate = model.AirDate,
-                AirDateUtc = model.AirDateUtc,
+                AirDateUtc = airDateUtc,
                 Runtime = model.Runtime,
                 FinaleType = model.FinaleType,
                 RomType = model.RomType.ToString().ToLowerInvariant(),
