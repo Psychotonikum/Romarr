@@ -1,0 +1,12 @@
+using Romarr.Core.Notifications;
+
+namespace Romarr.Api.V3.Notifications
+{
+    public class NotificationBulkResource : ProviderBulkResource<NotificationBulkResource>
+    {
+    }
+
+    public class NotificationBulkResourceMapper : ProviderBulkResourceMapper<NotificationBulkResource, NotificationDefinition>
+    {
+    }
+}

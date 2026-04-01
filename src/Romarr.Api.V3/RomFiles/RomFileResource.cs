@@ -1,0 +1,93 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using Romarr.Core.CustomFormats;
+using Romarr.Core.DecisionEngine.Specifications;
+using Romarr.Core.Games;
+using Romarr.Core.Languages;
+using Romarr.Core.MediaFiles;
+using Romarr.Core.Parser.Model;
+using Romarr.Core.Qualities;
+using Romarr.Api.V3.CustomFormats;
+using Romarr.Http.REST;
+
+namespace Romarr.Api.V3.RomFiles
+{
+    public class RomFileResource : RestResource
+    {
+        public int GameId { get; set; }
+        public int PlatformNumber { get; set; }
+        public string RelativePath { get; set; }
+        public string Path { get; set; }
+        public long Size { get; set; }
+        public DateTime DateAdded { get; set; }
+        public string SceneName { get; set; }
+        public string ReleaseGroup { get; set; }
+        public List<Language> Languages { get; set; }
+        public string Region { get; set; }
+        public string CrcHash { get; set; }
+        public QualityModel Quality { get; set; }
+        public List<CustomFormatResource> CustomFormats { get; set; }
+        public int CustomFormatScore { get; set; }
+        public int? IndexerFlags { get; set; }
+        public ReleaseType? ReleaseType { get; set; }
+        public MediaInfoResource MediaInfo { get; set; }
+        public RomFileType RomFileType { get; set; }
+        public string PatchVersion { get; set; }
+        public string DlcIndex { get; set; }
+        public string Revision { get; set; }
+        public int DumpQuality { get; set; }
+        public int Modification { get; set; }
+        public string ModificationName { get; set; }
+        public int RomReleaseType { get; set; }
+
+        public bool QualityCutoffNotMet { get; set; }
+    }
+
+    public static class RomFileResourceMapper
+    {
+        public static RomFileResource ToResource(this RomFile model, Romarr.Core.Games.Game game, IUpgradableSpecification upgradableSpecification, ICustomFormatCalculationService formatCalculationService)
+        {
+            if (model == null)
+            {
+                return null;
+            }
+
+            model.Game = game;
+            var customFormats = formatCalculationService?.ParseCustomFormat(model, model.Game);
+            var customFormatScore = game?.QualityProfile?.Value?.CalculateCustomFormatScore(customFormats) ?? 0;
+
+            return new RomFileResource
+            {
+                Id = model.Id,
+
+                GameId = model.GameId,
+                PlatformNumber = model.PlatformNumber,
+                RelativePath = model.RelativePath,
+                Path = Path.Combine(game.Path, model.RelativePath),
+                Size = model.Size,
+                DateAdded = model.DateAdded,
+                SceneName = model.SceneName,
+                ReleaseGroup = model.ReleaseGroup,
+                Languages = model.Languages,
+                Region = model.Region,
+                CrcHash = model.CrcHash,
+                Quality = model.Quality,
+                MediaInfo = model.MediaInfo.ToResource(model.SceneName),
+                QualityCutoffNotMet = upgradableSpecification.QualityCutoffNotMet(game.QualityProfile.Value, model.Quality),
+                CustomFormats = customFormats.ToResource(false),
+                CustomFormatScore = customFormatScore,
+                IndexerFlags = (int)model.IndexerFlags,
+                ReleaseType = model.ReleaseType,
+                RomFileType = model.RomFileType,
+                PatchVersion = model.PatchVersion,
+                DlcIndex = model.DlcIndex,
+                Revision = model.Revision,
+                DumpQuality = model.DumpQuality,
+                Modification = model.Modification,
+                ModificationName = model.ModificationName,
+                RomReleaseType = model.RomReleaseType,
+            };
+        }
+    }
+}

@@ -1,0 +1,26 @@
+using Dapper;
+using Romarr.Core.Datastore;
+
+namespace Romarr.Core.Housekeeping.Housekeepers
+{
+    public class CleanupOrphanedPendingReleases : IHousekeepingTask
+    {
+        private readonly IMainDatabase _database;
+
+        public CleanupOrphanedPendingReleases(IMainDatabase database)
+        {
+            _database = database;
+        }
+
+        public void Clean()
+        {
+            using var mapper = _database.OpenConnection();
+            mapper.Execute(@"DELETE FROM ""PendingReleases""
+                                     WHERE ""Id"" IN (
+                                     SELECT ""PendingReleases"".""Id"" FROM ""PendingReleases""
+                                     LEFT OUTER JOIN ""Games""
+                                     ON ""PendingReleases"".""GameId"" = ""Games"".""Id""
+                                     WHERE ""Games"".""Id"" IS NULL)");
+        }
+    }
+}

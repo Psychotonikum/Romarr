@@ -1,0 +1,10 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFrameworks>net10.0</TargetFrameworks>
+    <OutputType>Library</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Romarr.Core\Romarr.Core.csproj" />
+    <ProjectReference Include="..\Romarr.Common\Romarr.Common.csproj" />
+  </ItemGroup>
+</Project>

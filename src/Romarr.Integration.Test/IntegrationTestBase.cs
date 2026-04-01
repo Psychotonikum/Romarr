@@ -1,0 +1,405 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using FluentAssertions;
+using Microsoft.AspNetCore.SignalR.Client;
+using NLog;
+using NLog.Config;
+using NLog.Targets;
+using NUnit.Framework;
+using Romarr.Common.EnvironmentInfo;
+using Romarr.Common.Processes;
+using Romarr.Core.Qualities;
+using Romarr.Core.Games.Commands;
+using Romarr.Integration.Test.Client;
+using Romarr.SignalR;
+using Romarr.Test.Common.Categories;
+using RestSharp;
+using Romarr.Api.V3.Blocklist;
+using Romarr.Api.V3.Config;
+using Romarr.Api.V3.DownloadClient;
+using Romarr.Api.V3.RomFiles;
+using Romarr.Api.V3.Roms;
+using Romarr.Api.V3.History;
+using Romarr.Api.V3.Profiles.Quality;
+using Romarr.Api.V3.RootFolders;
+using Romarr.Api.V3.Game;
+using Romarr.Api.V3.System.Tasks;
+using Romarr.Api.V3.Tags;
+
+namespace Romarr.Integration.Test
+{
+    [IntegrationTest]
+    public abstract class IntegrationTestBase
+    {
+        protected RestClient RestClient { get; private set; }
+
+        public ClientBase<BlocklistResource> Blocklist;
+        public CommandClient Commands;
+        public ClientBase<TaskResource> Tasks;
+        public DownloadClientClient DownloadClients;
+        public GameFileClient Roms;
+        public ClientBase<HistoryResource> History;
+        public ClientBase<HostConfigResource> HostConfig;
+        public IndexerClient Indexers;
+        public IndexerClient Indexersv3;
+        public LogsClient Logs;
+        public ClientBase<MetadataSourceConfigResource> MetadataSourceConfig;
+        public ClientBase<NamingConfigResource> NamingConfig;
+        public NotificationClient Notifications;
+        public ClientBase<QualityProfileResource> QualityProfiles;
+        public ReleaseClient Releases;
+        public ReleasePushClient ReleasePush;
+        public ClientBase<RootFolderResource> RootFolders;
+        public SeriesClient Game;
+        public ClientBase<TagResource> Tags;
+        public ClientBase<RomResource> WantedMissing;
+        public ClientBase<RomResource> WantedCutoffUnmet;
+        public QueueClient Queue;
+
+        private List<SignalRMessage> _signalRReceived;
+
+        private HubConnection _signalrConnection;
+
+        protected IEnumerable<SignalRMessage> SignalRMessages => _signalRReceived;
+
+        public IntegrationTestBase()
+        {
+            new StartupContext();
+
+            LogManager.Configuration = new LoggingConfiguration();
+            var consoleTarget = new ConsoleTarget { Layout = "${level}: ${message} ${exception}" };
+            LogManager.Configuration.AddTarget(consoleTarget.GetType().Name, consoleTarget);
+            LogManager.Configuration.LoggingRules.Add(new LoggingRule("*", LogLevel.Trace, consoleTarget));
+        }
+
+        public string TempDirectory { get; private set; }
+
+        public abstract string SeriesRootFolder { get; }
+
+        protected abstract string RootUrl { get; }
+
+        protected abstract string ApiKey { get; }
+
+        protected abstract void StartTestTarget();
+
+        protected abstract void InitializeTestTarget();
+
+        protected abstract void StopTestTarget();
+
+        [OneTimeSetUp]
+        public void SmokeTestSetup()
+        {
+            StartTestTarget();
+            InitRestClients();
+            InitializeTestTarget();
+        }
+
+        protected virtual void InitRestClients()
+        {
+            RestClient = new RestClient(RootUrl + "api/v3/");
+            RestClient.AddDefaultHeader("Authentication", ApiKey);
+            RestClient.AddDefaultHeader("X-Api-Key", ApiKey);
+
+            Blocklist = new ClientBase<BlocklistResource>(RestClient, ApiKey);
+            Commands = new CommandClient(RestClient, ApiKey);
+            Tasks = new ClientBase<TaskResource>(RestClient, ApiKey, "system/task");
+            DownloadClients = new DownloadClientClient(RestClient, ApiKey);
+            Roms = new GameFileClient(RestClient, ApiKey);
+            History = new ClientBase<HistoryResource>(RestClient, ApiKey);
+            HostConfig = new ClientBase<HostConfigResource>(RestClient, ApiKey, "config/host");
+            Indexers = new IndexerClient(RestClient, ApiKey);
+            Logs = new LogsClient(RestClient, ApiKey);
+            MetadataSourceConfig = new ClientBase<MetadataSourceConfigResource>(RestClient, ApiKey, "config/metadatasource");
+            NamingConfig = new ClientBase<NamingConfigResource>(RestClient, ApiKey, "config/naming");
+            Notifications = new NotificationClient(RestClient, ApiKey);
+            QualityProfiles = new ClientBase<QualityProfileResource>(RestClient, ApiKey);
+            Releases = new ReleaseClient(RestClient, ApiKey);
+            ReleasePush = new ReleasePushClient(RestClient, ApiKey);
+            RootFolders = new ClientBase<RootFolderResource>(RestClient, ApiKey);
+            Game = new SeriesClient(RestClient, ApiKey);
+            Tags = new ClientBase<TagResource>(RestClient, ApiKey);
+            WantedMissing = new ClientBase<RomResource>(RestClient, ApiKey, "wanted/missing");
+            WantedCutoffUnmet = new ClientBase<RomResource>(RestClient, ApiKey, "wanted/cutoff");
+            Queue = new QueueClient(RestClient, ApiKey);
+        }
+
+        [OneTimeTearDown]
+        public void SmokeTestTearDown()
+        {
+            StopTestTarget();
+        }
+
+        [SetUp]
+        public void IntegrationSetUp()
+        {
+            TempDirectory = Path.Combine(TestContext.CurrentContext.TestDirectory, "_test_" + ProcessProvider.GetCurrentProcessId() + "_" + DateTime.UtcNow.Ticks);
+
+            // Wait for things to get quiet, otherwise the previous test might influence the current one.
+            Commands.WaitAll();
+        }
+
+        [TearDown]
+        public async Task IntegrationTearDown()
+        {
+            if (_signalrConnection != null)
+            {
+                await _signalrConnection.StopAsync();
+
+                _signalrConnection = null;
+                _signalRReceived = new List<SignalRMessage>();
+            }
+
+            if (Directory.Exists(TempDirectory))
+            {
+                try
+                {
+                    Directory.Delete(TempDirectory, true);
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        public string GetTempDirectory(params string[] args)
+        {
+            var path = Path.Combine(TempDirectory, Path.Combine(args));
+
+            Directory.CreateDirectory(path);
+
+            return path;
+        }
+
+        protected async Task ConnectSignalR()
+        {
+            _signalRReceived = new List<SignalRMessage>();
+            _signalrConnection = new HubConnectionBuilder().WithUrl("http://localhost:9797/signalr/messages").Build();
+
+            var cts = new CancellationTokenSource();
+
+            _signalrConnection.Closed += e =>
+            {
+                cts.Cancel();
+                return Task.CompletedTask;
+            };
+
+            _signalrConnection.On<SignalRMessage>("receiveMessage", (message) =>
+            {
+                _signalRReceived.Add(message);
+            });
+
+            var connected = false;
+            var retryCount = 0;
+
+            while (!connected)
+            {
+                try
+                {
+                    Console.WriteLine("Connecting to signalR");
+
+                    await _signalrConnection.StartAsync();
+                    connected = true;
+                    break;
+                }
+                catch (Exception)
+                {
+                    if (retryCount > 25)
+                    {
+                        Assert.Fail("Couldn't establish signalR connection");
+                    }
+                }
+
+                retryCount++;
+                Thread.Sleep(200);
+            }
+        }
+
+        public static void WaitForCompletion(Func<bool> predicate, int timeout = 10000, int interval = 500)
+        {
+            var count = timeout / interval;
+            for (var i = 0; i < count; i++)
+            {
+                if (predicate())
+                {
+                    return;
+                }
+
+                Thread.Sleep(interval);
+            }
+
+            if (predicate())
+            {
+                return;
+            }
+
+            Assert.Fail("Timed on wait");
+        }
+
+        public GameResource EnsureSeries(int igdbId, string gameTitle, bool? monitored = null)
+        {
+            var result = Game.All().FirstOrDefault(v => v.IgdbId == igdbId);
+
+            if (result == null)
+            {
+                var lookup = Game.Lookup("igdb:" + igdbId);
+                var game = lookup.First();
+                game.QualityProfileId = 1;
+                game.Path = Path.Combine(SeriesRootFolder, game.Title);
+                game.Monitored = true;
+                game.Platforms.ForEach(v => v.Monitored = true);
+                game.AddOptions = new Core.Games.AddGameOptions();
+                Directory.CreateDirectory(game.Path);
+
+                result = Game.Post(game);
+                Commands.WaitAll();
+            }
+
+            if (monitored.HasValue)
+            {
+                var changed = false;
+                if (result.Monitored != monitored.Value)
+                {
+                    result.Monitored = monitored.Value;
+                    changed = true;
+                }
+
+                result.Platforms.ForEach(platform =>
+                {
+                    if (platform.Monitored != monitored.Value)
+                    {
+                        platform.Monitored = monitored.Value;
+                        changed = true;
+                    }
+                });
+
+                if (changed)
+                {
+                    Game.Put(result);
+                }
+            }
+
+            Commands.WaitAll();
+
+            return result;
+        }
+
+        public void EnsureNoGame(int igdbId, string gameTitle)
+        {
+            var result = Game.All().FirstOrDefault(v => v.IgdbId == igdbId);
+
+            if (result != null)
+            {
+                Game.Delete(result.Id);
+            }
+        }
+
+        public RomFileResource EnsureRomFile(GameResource game, int platform, int rom, Quality quality)
+        {
+            var result = Roms.GetGameFilesInSeries(game.Id).Single(v => v.PlatformNumber == platform && v.RomNumber == rom);
+
+            if (result.RomFile == null)
+            {
+                var path = Path.Combine(SeriesRootFolder, game.Title, string.Format("Game.S{0}E{1}.{2}.mkv", platform, rom, quality.Name));
+
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                File.WriteAllText(path, "Fake Rom");
+
+                Commands.PostAndWait(new RefreshGameCommand(new List<int> { game.Id }));
+
+                Commands.WaitAll();
+
+                result = Roms.GetGameFilesInSeries(game.Id).Single(v => v.PlatformNumber == platform && v.RomNumber == rom);
+
+                result.RomFileId.Should().NotBe(0);
+            }
+
+            return result.RomFile;
+        }
+
+        public QualityProfileResource EnsureQualityProfileCutoff(int profileId, Quality cutoff, bool upgradeAllowed)
+        {
+            var needsUpdate = false;
+            var profile = QualityProfiles.Get(profileId);
+
+            if (profile.Cutoff != cutoff.Id)
+            {
+                profile.Cutoff = cutoff.Id;
+                needsUpdate = true;
+            }
+
+            if (profile.UpgradeAllowed != upgradeAllowed)
+            {
+                profile.UpgradeAllowed = upgradeAllowed;
+                needsUpdate = true;
+            }
+
+            if (needsUpdate)
+            {
+                profile = QualityProfiles.Put(profile);
+            }
+
+            return profile;
+        }
+
+        public TagResource EnsureTag(string tagLabel)
+        {
+            var tag = Tags.All().FirstOrDefault(v => v.Label == tagLabel);
+
+            if (tag == null)
+            {
+                tag = Tags.Post(new TagResource { Label = tagLabel });
+            }
+
+            return tag;
+        }
+
+        public void EnsureNoTag(string tagLabel)
+        {
+            var tag = Tags.All().FirstOrDefault(v => v.Label == tagLabel);
+
+            if (tag != null)
+            {
+                Tags.Delete(tag.Id);
+            }
+        }
+
+        public DownloadClientResource EnsureDownloadClient(bool enabled = true)
+        {
+            var client = DownloadClients.All().FirstOrDefault(v => v.Name == "Test UsenetBlackhole");
+
+            if (client == null)
+            {
+                var schema = DownloadClients.Schema().First(v => v.Implementation == "UsenetBlackhole");
+
+                schema.Enable = enabled;
+                schema.Name = "Test UsenetBlackhole";
+                schema.Fields.First(v => v.Name == "watchFolder").Value = GetTempDirectory("Download", "UsenetBlackhole", "Watch");
+                schema.Fields.First(v => v.Name == "nzbFolder").Value = GetTempDirectory("Download", "UsenetBlackhole", "Nzb");
+
+                client = DownloadClients.Post(schema);
+            }
+            else if (client.Enable != enabled)
+            {
+                client.Enable = enabled;
+
+                client = DownloadClients.Put(client);
+            }
+
+            return client;
+        }
+
+        public void EnsureNoDownloadClient()
+        {
+            var clients = DownloadClients.All();
+
+            foreach (var client in clients)
+            {
+                DownloadClients.Delete(client.Id);
+            }
+        }
+    }
+}

@@ -1,0 +1,199 @@
+using System.Collections.Generic;
+using System.Linq;
+using FizzWare.NBuilder;
+using FluentAssertions;
+using Moq;
+using NUnit.Framework;
+using Romarr.Core.CustomFormats;
+using Romarr.Core.DecisionEngine;
+using Romarr.Core.DecisionEngine.Specifications.RssSync;
+using Romarr.Core.Download.Pending;
+using Romarr.Core.Languages;
+using Romarr.Core.Parser.Model;
+using Romarr.Core.Profiles.Qualities;
+using Romarr.Core.Qualities;
+using Romarr.Core.Test.CustomFormats;
+using Romarr.Core.Test.Framework;
+using Romarr.Core.Games;
+
+namespace Romarr.Core.Test.DecisionEngineTests.RssSync
+{
+    [TestFixture]
+    public class PendingSpecificationFixture : CoreTest<PendingSpecification>
+    {
+        private Game _series;
+        private Rom _gameFile;
+        private RemoteRom _remoteRom;
+
+        private Game _otherGame;
+        private Rom _otherGameFile;
+
+        private ReleaseInfo _releaseInfo;
+        private ReleaseDecisionInformation _information = new(false, null);
+
+        [SetUp]
+        public void Setup()
+        {
+            CustomFormatsTestHelpers.GivenCustomFormats();
+
+            _series = Builder<Game>.CreateNew()
+                                     .With(e => e.QualityProfile = new QualityProfile
+                                                                {
+                                                                    UpgradeAllowed = true,
+                                                                    Items = Qualities.QualityFixture.GetDefaultQualities(),
+                                                                    FormatItems = CustomFormatsTestHelpers.GetSampleFormatItems(),
+                                                                    MinFormatScore = 0
+                                                                })
+                                     .Build();
+
+            _gameFile = Builder<Rom>.CreateNew()
+                                       .With(e => e.GameId = _series.Id)
+                                       .Build();
+
+            _otherGame = Builder<Game>.CreateNew()
+                                          .With(s => s.Id = 2)
+                                          .Build();
+
+            _otherGameFile = Builder<Rom>.CreateNew()
+                                            .With(e => e.GameId = _otherGame.Id)
+                                            .With(e => e.Id = 2)
+                                            .With(e => e.PlatformNumber = 2)
+                                            .With(e => e.FileNumber = 2)
+                                            .Build();
+
+            _releaseInfo = Builder<ReleaseInfo>.CreateNew()
+                                               .Build();
+
+            _remoteRom = Builder<RemoteRom>.CreateNew()
+                                                   .With(r => r.Game = _series)
+                                                   .With(r => r.Roms = new List<Rom> { _gameFile })
+                                                   .With(r => r.ParsedRomInfo = new ParsedRomInfo { Quality = new QualityModel(Quality.DVD), Languages = new List<Language> { Language.Spanish } })
+                                                   .With(r => r.CustomFormats = new List<CustomFormat>())
+                                                   .Build();
+
+            Mocker.GetMock<ICustomFormatCalculationService>()
+                  .Setup(x => x.ParseCustomFormat(It.IsAny<RemoteRom>(), It.IsAny<long>()))
+                  .Returns(new List<CustomFormat>());
+        }
+
+        private void GivenEmptyPendingQueue()
+        {
+            Mocker.GetMock<IPendingReleaseService>()
+                .Setup(s => s.GetPendingQueue())
+                .Returns(new List<Queue.Queue>());
+        }
+
+        private void GivenPendingQueue(IEnumerable<RemoteRom> remoteRoms)
+        {
+            var queue = remoteRoms.Select(remoteRom => new Queue.Queue
+            {
+                RemoteRom = remoteRom
+            });
+
+            Mocker.GetMock<IPendingReleaseService>()
+                .Setup(s => s.GetPendingQueue())
+                .Returns(queue.ToList());
+        }
+
+        [Test]
+        public void should_return_true_when_pending_queue_is_empty()
+        {
+            GivenEmptyPendingQueue();
+
+            Subject.IsSatisfiedBy(_remoteRom, _information).Accepted.Should().BeTrue();
+
+            Mocker.GetMock<IPendingReleaseService>()
+                .Verify(s => s.GetPendingQueue(), Times.Once);
+        }
+
+        [Test]
+        public void should_return_true_when_not_pushed_release()
+        {
+            _remoteRom.ReleaseSource = ReleaseSourceType.Rss;
+
+            GivenEmptyPendingQueue();
+
+            Subject.IsSatisfiedBy(_remoteRom, _information).Accepted.Should().BeTrue();
+
+            Mocker.GetMock<IPendingReleaseService>()
+                .Verify(s => s.GetPendingQueue(), Times.Never);
+        }
+
+        [Test]
+        public void should_return_true_when_series_and_gameFile_is_not_pending()
+        {
+            GivenEmptyPendingQueue();
+
+            Mocker.GetMock<IPendingReleaseService>()
+                .Setup(s => s.GetPendingQueue())
+                .Returns(new List<Queue.Queue>
+                {
+                    new()
+                    {
+                        RemoteRom = new RemoteRom
+                        {
+                            Game = _otherGame,
+                            Roms = new List<Rom> { _otherGameFile }
+                        }
+                    }
+                });
+
+            Subject.IsSatisfiedBy(_remoteRom, _information).Accepted.Should().BeTrue();
+
+            Mocker.GetMock<IPendingReleaseService>()
+                .Verify(s => s.GetPendingQueue(), Times.Once);
+        }
+
+        [Test]
+        public void should_return_true_when_gameFile_is_not_pending()
+        {
+            GivenEmptyPendingQueue();
+
+            _otherGameFile.GameId = _series.Id;
+
+            Mocker.GetMock<IPendingReleaseService>()
+                .Setup(s => s.GetPendingQueue())
+                .Returns(new List<Queue.Queue>
+                {
+                    new()
+                    {
+                        RemoteRom = new RemoteRom
+                        {
+                            Game = _series,
+                            Roms = new List<Rom> { _otherGameFile }
+                        }
+                    }
+                });
+
+            Subject.IsSatisfiedBy(_remoteRom, _information).Accepted.Should().BeTrue();
+
+            Mocker.GetMock<IPendingReleaseService>()
+                .Verify(s => s.GetPendingQueue(), Times.Once);
+        }
+
+        [Test]
+        public void should_return_false_when_gameFile_is_pending()
+        {
+            GivenEmptyPendingQueue();
+
+            Mocker.GetMock<IPendingReleaseService>()
+                .Setup(s => s.GetPendingQueue())
+                .Returns(new List<Queue.Queue>
+                {
+                    new()
+                    {
+                        RemoteRom = new RemoteRom
+                        {
+                            Game = _series,
+                            Roms = new List<Rom> { _gameFile }
+                        }
+                    }
+                });
+
+            Subject.IsSatisfiedBy(_remoteRom, _information).Accepted.Should().BeFalse();
+
+            Mocker.GetMock<IPendingReleaseService>()
+                .Verify(s => s.GetPendingQueue(), Times.Once);
+        }
+    }
+}

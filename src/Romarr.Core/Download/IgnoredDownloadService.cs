@@ -1,0 +1,54 @@
+using System.Linq;
+using NLog;
+using Romarr.Core.Download.TrackedDownloads;
+using Romarr.Core.Messaging.Events;
+
+namespace Romarr.Core.Download
+{
+    public interface IIgnoredDownloadService
+    {
+        bool IgnoreDownload(TrackedDownload trackedDownload);
+    }
+
+    public class IgnoredDownloadService : IIgnoredDownloadService
+    {
+        private readonly IEventAggregator _eventAggregator;
+        private readonly Logger _logger;
+
+        public IgnoredDownloadService(IEventAggregator eventAggregator,
+                                      Logger logger)
+        {
+            _eventAggregator = eventAggregator;
+            _logger = logger;
+        }
+
+        public bool IgnoreDownload(TrackedDownload trackedDownload)
+        {
+            var game = trackedDownload.RemoteRom.Game;
+
+            if (game == null)
+            {
+                _logger.Warn("Unable to ignore download for unknown game");
+                return false;
+            }
+
+            var roms = trackedDownload.RemoteRom.Roms;
+
+            var downloadIgnoredEvent = new DownloadIgnoredEvent
+                                      {
+                                          GameId = game.Id,
+                                          RomIds = roms.Select(e => e.Id).ToList(),
+                                          Languages = trackedDownload.RemoteRom.Languages,
+                                          Quality = trackedDownload.RemoteRom.ParsedRomInfo.Quality,
+                                          SourceTitle = trackedDownload.DownloadItem.Title,
+                                          DownloadClientInfo = trackedDownload.DownloadItem.DownloadClientInfo,
+                                          DownloadId = trackedDownload.DownloadItem.DownloadId,
+                                          TrackedDownload = trackedDownload,
+                                          Message = "Manually ignored"
+                                      };
+
+            _eventAggregator.PublishEvent(downloadIgnoredEvent);
+            return true;
+        }
+    }
+}

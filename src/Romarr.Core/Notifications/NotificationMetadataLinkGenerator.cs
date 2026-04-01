@@ -1,0 +1,45 @@
+using System.Collections.Generic;
+using Romarr.Common.Extensions;
+using Romarr.Core.Games;
+
+namespace Romarr.Core.Notifications;
+
+public static class NotificationMetadataLinkGenerator
+{
+    public static List<NotificationMetadataLink> GenerateLinks(Game game, IEnumerable<int> metadataLinks)
+    {
+        var links = new List<NotificationMetadataLink>();
+
+        if (game == null)
+        {
+            return links;
+        }
+
+        foreach (var link in metadataLinks)
+        {
+            var linkType = (MetadataLinkType)link;
+
+            if (linkType == MetadataLinkType.Imdb && game.ImdbId.IsNotNullOrWhiteSpace())
+            {
+                links.Add(new NotificationMetadataLink(MetadataLinkType.Imdb, "IMDb", $"https://www.imdb.com/title/{game.ImdbId}"));
+            }
+
+            if (linkType == MetadataLinkType.Igdb && game.IgdbId > 0)
+            {
+                links.Add(new NotificationMetadataLink(MetadataLinkType.Igdb, "TVDb", $"http://www.theigdb.com/?tab=game&id={game.IgdbId}"));
+            }
+
+            if (linkType == MetadataLinkType.Trakt && game.IgdbId > 0)
+            {
+                links.Add(new NotificationMetadataLink(MetadataLinkType.Trakt, "Trakt", $"http://trakt.tv/search/igdb/{game.IgdbId}?id_type=show"));
+            }
+
+            if (linkType == MetadataLinkType.Tvmaze && game.RawgId > 0)
+            {
+                links.Add(new NotificationMetadataLink(MetadataLinkType.Tvmaze, "TVMaze", $"http://www.tvmaze.com/shows/{game.RawgId}/_"));
+            }
+        }
+
+        return links;
+    }
+}

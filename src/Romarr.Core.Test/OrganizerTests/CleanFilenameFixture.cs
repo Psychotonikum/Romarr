@@ -1,0 +1,30 @@
+using FluentAssertions;
+using NUnit.Framework;
+using Romarr.Core.Organizer;
+using Romarr.Core.Test.Framework;
+
+namespace Romarr.Core.Test.OrganizerTests
+{
+    [TestFixture]
+    public class CleanFilenameFixture : CoreTest
+    {
+        [TestCase("Law & Order: Criminal Intent - S10E07 - Icarus [Unknown]", "Law & Order - Criminal Intent - S10E07 - Icarus [Unknown]")]
+        public void should_replaace_invalid_characters(string name, string expectedName)
+        {
+            FileNameBuilder.CleanFileName(name).Should().Be(expectedName);
+        }
+
+        [TestCase(".hack s01e01", "hack s01e01")]
+        public void should_remove_periods_from_start(string name, string expectedName)
+        {
+            FileNameBuilder.CleanFileName(name).Should().Be(expectedName);
+        }
+
+        [TestCase(" Game Title - S01E01 - Rom Title", "Game Title - S01E01 - Rom Title")]
+        [TestCase("Game Title - S01E01 - Rom Title ", "Game Title - S01E01 - Rom Title")]
+        public void should_remove_spaces_from_start_and_end(string name, string expectedName)
+        {
+            FileNameBuilder.CleanFileName(name).Should().Be(expectedName);
+        }
+    }
+}

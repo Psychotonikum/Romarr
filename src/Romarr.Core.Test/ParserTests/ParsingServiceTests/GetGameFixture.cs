@@ -1,0 +1,63 @@
+﻿using FluentAssertions;
+using Moq;
+using NUnit.Framework;
+using Romarr.Core.DataAugmentation.Scene;
+using Romarr.Core.Parser;
+using Romarr.Core.Test.Framework;
+using Romarr.Core.Games;
+
+namespace Romarr.Core.Test.ParserTests.ParsingServiceTests
+{
+    [TestFixture]
+    public class GetSeriesFixture : CoreTest<ParsingService>
+    {
+        [Test]
+        public void should_use_passed_in_title_when_it_cannot_be_parsed()
+        {
+            const string title = "30 Stone";
+
+            Subject.GetGame(title);
+
+            Mocker.GetMock<IGameService>()
+                  .Verify(s => s.FindByTitle(title), Times.Once());
+        }
+
+        [Test]
+        public void should_use_parsed_series_title()
+        {
+            const string title = "30.Stone.S01E01.720p.hdtv";
+
+            Subject.GetGame(title);
+
+            Mocker.GetMock<IGameService>()
+                  .Verify(s => s.FindByTitle(Parser.Parser.ParseTitle(title).GameTitle), Times.Once());
+        }
+
+        [Test]
+        public void should_fallback_to_title_without_year_and_year_when_title_lookup_fails()
+        {
+            const string title = "Show.2004.S01E01.720p.hdtv";
+            var parsedRomInfo = Parser.Parser.ParseTitle(title);
+
+            Subject.GetGame(title);
+
+            Mocker.GetMock<IGameService>()
+                  .Verify(s => s.FindByTitle(parsedRomInfo.GameTitleInfo.TitleWithoutYear,
+                                             parsedRomInfo.GameTitleInfo.Year),
+                      Times.Once());
+        }
+
+        [Test]
+        public void should_parse_concatenated_title()
+        {
+            var game = new Game { IgdbId = 100 };
+            Mocker.GetMock<IGameService>().Setup(v => v.FindByTitle("Welcome")).Returns(game);
+            Mocker.GetMock<ISceneMappingService>().Setup(v => v.FindIgdbId("Mairimashita", It.IsAny<string>(), It.IsAny<int>())).Returns(100);
+
+            var result = Subject.GetGame("Welcome (Mairimashita).S01E01.720p.WEB-DL-Viva");
+
+            result.Should().NotBeNull();
+            result.IgdbId.Should().Be(100);
+        }
+    }
+}

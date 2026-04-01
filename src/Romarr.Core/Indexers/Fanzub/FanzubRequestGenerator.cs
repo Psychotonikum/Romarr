@@ -1,0 +1,94 @@
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
+using Romarr.Common.Extensions;
+using Romarr.Common.Http;
+using Romarr.Core.IndexerSearch.Definitions;
+
+namespace Romarr.Core.Indexers.Fanzub
+{
+    public class FanzubRequestGenerator : IIndexerRequestGenerator
+    {
+        private static readonly Regex RemoveCharactersRegex = new Regex(@"[!?`]", RegexOptions.Compiled);
+
+        public FanzubSettings Settings { get; set; }
+        public int PageSize { get; set; }
+
+        public FanzubRequestGenerator()
+        {
+            PageSize = 100;
+        }
+
+        public virtual IndexerPageableRequestChain GetRecentRequests()
+        {
+            var pageableRequests = new IndexerPageableRequestChain();
+
+            pageableRequests.Add(GetPagedRequests(null));
+
+            return pageableRequests;
+        }
+
+        public virtual IndexerPageableRequestChain GetSearchRequests(SingleGameFileSearchCriteria searchCriteria)
+        {
+            return new IndexerPageableRequestChain();
+        }
+
+        public virtual IndexerPageableRequestChain GetSearchRequests(PlatformSearchCriteria searchCriteria)
+        {
+            var pageableRequests = new IndexerPageableRequestChain();
+
+            if (Settings.AnimeStandardFormatSearch && searchCriteria.PlatformNumber > 0)
+            {
+                var searchTitles = searchCriteria.CleanSceneTitles.SelectMany(v => GetPlatformSearchStrings(v, searchCriteria.PlatformNumber)).ToList();
+                pageableRequests.Add(GetPagedRequests(string.Join("|", searchTitles)));
+            }
+
+            return pageableRequests;
+        }
+
+        public virtual IndexerPageableRequestChain GetSearchRequests(SpecialGameFileSearchCriteria searchCriteria)
+        {
+            return new IndexerPageableRequestChain();
+        }
+
+        private IEnumerable<IndexerRequest> GetPagedRequests(string query)
+        {
+            var url = new StringBuilder();
+            url.AppendFormat("{0}?cat=anime&max={1}", Settings.BaseUrl, PageSize);
+
+            if (query.IsNotNullOrWhiteSpace())
+            {
+                url.AppendFormat("&q={0}", query);
+            }
+
+            yield return new IndexerRequest(url.ToString(), HttpAccept.Rss);
+        }
+
+        private IEnumerable<string> GetPlatformSearchStrings(string title, int platformNumber)
+        {
+            var formats = new[] { "{0}%20S{1:00}", "{0}%20-%20S{1:00}" };
+
+            return formats.Select(s => "\"" + string.Format(s, CleanTitle(title), platformNumber) + "\"");
+        }
+
+        private IEnumerable<string> GetTitleSearchStrings(string title, int absoluteRomNumber)
+        {
+            var formats = new[] { "{0}%20{1:00}", "{0}%20-%20{1:00}" };
+
+            return formats.Select(s => "\"" + string.Format(s, CleanTitle(title), absoluteRomNumber) + "\"");
+        }
+
+        private IEnumerable<string> GetTitleSearchStrings(string title, int platformNumber, int romNumber)
+        {
+            var formats = new[] { "{0}%20S{1:00}E{2:00}", "{0}%20-%20S{1:00}E{2:00}" };
+
+            return formats.Select(s => "\"" + string.Format(s, CleanTitle(title), platformNumber, romNumber) + "\"");
+        }
+
+        private string CleanTitle(string title)
+        {
+            return RemoveCharactersRegex.Replace(title, "");
+        }
+    }
+}

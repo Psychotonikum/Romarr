@@ -1,0 +1,10 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net10.0</TargetFrameworks>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Romarr.Common.Test\Romarr.Common.Test.csproj" />
+    <ProjectReference Include="..\Romarr.Test.Common\Romarr.Test.Common.csproj" />
+    <ProjectReference Include="..\Romarr.Windows\Romarr.Windows.csproj" />
+  </ItemGroup>
+</Project>

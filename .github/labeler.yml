@@ -1,0 +1,23 @@
+'connection':
+  - changed-files:
+    - any-glob-to-any-file: src/Romarr.Core/Notifications/**/*
+
+'db-migration':
+  - changed-files:
+    - any-glob-to-any-file: src/Romarr.Core/Datastore/Migration/*
+
+'download-client':
+  - changed-files:
+    - any-glob-to-any-file: src/Romarr.Core/Download/Clients/**/*
+
+'indexer':
+  - changed-files:
+    - any-glob-to-any-file: src/Romarr.Core/Indexers/**/*
+
+'parsing':
+  - changed-files:
+    - any-glob-to-any-file: src/Romarr.Core/Parser/**/*
+
+'ui-only':
+  - changed-files:
+    - any-glob-to-all-files: frontend/**/*

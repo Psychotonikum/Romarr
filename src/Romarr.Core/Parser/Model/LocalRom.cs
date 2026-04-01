@@ -1,0 +1,163 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Romarr.Common.Extensions;
+using Romarr.Core.CustomFormats;
+using Romarr.Core.Download;
+using Romarr.Core.Languages;
+using Romarr.Core.MediaFiles;
+using Romarr.Core.MediaFiles.MediaInfo;
+using Romarr.Core.Qualities;
+using Romarr.Core.Games;
+
+namespace Romarr.Core.Parser.Model
+{
+    public class LocalGameFile
+    {
+        public string Path { get; set; }
+        public long Size { get; set; }
+        public ParsedRomInfo FileRomInfo { get; set; }
+        public ParsedRomInfo DownloadClientRomInfo { get; set; }
+        public DownloadClientItem DownloadItem { get; set; }
+        public ParsedRomInfo FolderRomInfo { get; set; }
+        public Game Game { get; set; }
+        public List<Rom> Roms { get; set; } = new();
+        public List<DeletedRomFile> OldFiles { get; set; }
+        public QualityModel Quality { get; set; }
+        public List<Language> Languages { get; set; } = new();
+        public string Region { get; set; }
+        public string Revision { get; set; }
+        public int DumpQuality { get; set; }
+        public int Modification { get; set; }
+        public string ModificationName { get; set; }
+        public int RomReleaseType { get; set; }
+        public IndexerFlags IndexerFlags { get; set; }
+        public ReleaseType ReleaseType { get; set; }
+        public MediaInfoModel MediaInfo { get; set; }
+        public bool ExistingFile { get; set; }
+        public bool SceneSource { get; set; }
+        public string ReleaseGroup { get; set; }
+        public string ReleaseHash { get; set; }
+        public string SceneName { get; set; }
+        public bool OtherVideoFiles { get; set; }
+        public List<CustomFormat> CustomFormats { get; set; } = new();
+        public int CustomFormatScore { get; set; }
+        public List<CustomFormat> OriginalFileNameCustomFormats { get; set; } = new();
+        public int OriginalFileNameCustomFormatScore { get; set; }
+        public GrabbedReleaseInfo Release { get; set; }
+        public bool ScriptImported { get; set; }
+        public string FileNameBeforeRename { get; set; }
+        public string FileNameUsedForCustomFormatCalculation { get; set; }
+        public bool ShouldImportExtras { get; set; }
+        public List<string> PossibleExtraFiles { get; set; }
+        public SubtitleTitleInfo SubtitleInfo { get; set; }
+
+        public int PlatformNumber
+        {
+            get
+            {
+                var platforms = Roms.Select(c => c.PlatformNumber).Distinct().ToList();
+
+                if (platforms.Empty())
+                {
+                    throw new InvalidPlatformException("Expected one platform, but found none");
+                }
+
+                if (platforms.Count > 1)
+                {
+                    throw new InvalidPlatformException("Expected one platform, but found {0} ({1})", platforms.Count, string.Join(", ", platforms));
+                }
+
+                return platforms.Single();
+            }
+        }
+
+        public bool IsSpecial => PlatformNumber == 0;
+
+        public override string ToString()
+        {
+            return Path;
+        }
+
+        public string GetSceneOrFileName()
+        {
+            if (SceneName.IsNotNullOrWhiteSpace())
+            {
+                return SceneName;
+            }
+
+            if (Path.IsNotNullOrWhiteSpace())
+            {
+                return System.IO.Path.GetFileNameWithoutExtension(Path);
+            }
+
+            return string.Empty;
+        }
+
+        public RomFile ToRomFile()
+        {
+            var romFile = new RomFile
+            {
+                DateAdded = DateTime.UtcNow,
+                GameId = Game.Id,
+                Path = Path.CleanFilePath(),
+                Quality = Quality,
+                MediaInfo = MediaInfo,
+                Game = Game,
+                PlatformNumber = PlatformNumber,
+                Roms = Roms,
+                ReleaseGroup = ReleaseGroup,
+                ReleaseHash = ReleaseHash,
+                Languages = Languages,
+                Region = Region,
+                Revision = Revision,
+                DumpQuality = DumpQuality,
+                Modification = Modification,
+                ModificationName = ModificationName,
+                RomReleaseType = RomReleaseType,
+                IndexerFlags = IndexerFlags,
+                ReleaseType = ReleaseType,
+                SceneName = SceneName,
+                OriginalFilePath = GetOriginalFilePath()
+            };
+
+            if (Game.Path.IsParentPath(romFile.Path))
+            {
+                romFile.RelativePath = Game.Path.GetRelativePath(Path.CleanFilePath());
+            }
+
+            if (romFile.ReleaseType == ReleaseType.Unknown)
+            {
+                romFile.ReleaseType = DownloadClientRomInfo?.ReleaseType ??
+                                          FolderRomInfo?.ReleaseType ??
+                                          FileRomInfo?.ReleaseType ??
+                                          ReleaseType.Unknown;
+            }
+
+            return romFile;
+        }
+
+        private string GetOriginalFilePath()
+        {
+            if (FolderRomInfo != null)
+            {
+                var folderPath = Path.GetAncestorPath(FolderRomInfo.ReleaseTitle);
+
+                if (folderPath != null)
+                {
+                    return folderPath.GetParentPath().GetRelativePath(Path);
+                }
+            }
+
+            var parentPath = Path.GetParentPath();
+            var grandparentPath = parentPath.GetParentPath();
+
+            if (grandparentPath != null)
+            {
+                return grandparentPath.GetRelativePath(Path);
+            }
+
+            return System.IO.Path.GetFileName(Path);
+        }
+    }
+}

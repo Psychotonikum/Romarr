@@ -1,0 +1,51 @@
+using System.Collections.Generic;
+using System.Linq;
+using Romarr.Core.ImportLists.Exclusions;
+using Romarr.Http.REST;
+
+namespace Romarr.Api.V3.ImportLists
+{
+    public class ImportListExclusionResource : RestResource
+    {
+        public int IgdbId { get; set; }
+        public string Title { get; set; }
+    }
+
+    public static class ImportListExclusionResourceMapper
+    {
+        public static ImportListExclusionResource ToResource(this ImportListExclusion model)
+        {
+            if (model == null)
+            {
+                return null;
+            }
+
+            return new ImportListExclusionResource
+            {
+                Id = model.Id,
+                IgdbId = model.IgdbId,
+                Title = model.Title,
+            };
+        }
+
+        public static ImportListExclusion ToModel(this ImportListExclusionResource resource)
+        {
+            if (resource == null)
+            {
+                return null;
+            }
+
+            return new ImportListExclusion
+            {
+                Id = resource.Id,
+                IgdbId = resource.IgdbId,
+                Title = resource.Title
+            };
+        }
+
+        public static List<ImportListExclusionResource> ToResource(this IEnumerable<ImportListExclusion> filters)
+        {
+            return filters.Select(ToResource).ToList();
+        }
+    }
+}

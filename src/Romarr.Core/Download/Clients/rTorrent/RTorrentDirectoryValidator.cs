@@ -1,0 +1,29 @@
+﻿using FluentValidation;
+using FluentValidation.Results;
+using Romarr.Common.Extensions;
+using Romarr.Core.Download.Clients.RTorrent;
+using Romarr.Core.Validation.Paths;
+
+namespace Romarr.Core.Download.Clients.rTorrent
+{
+    public interface IRTorrentDirectoryValidator
+    {
+        ValidationResult Validate(RTorrentSettings instance);
+    }
+
+    public class RTorrentDirectoryValidator : AbstractValidator<RTorrentSettings>, IRTorrentDirectoryValidator
+    {
+        public RTorrentDirectoryValidator(RootFolderValidator rootFolderValidator,
+                                          PathExistsValidator pathExistsValidator,
+                                          MappedNetworkDriveValidator mappedNetworkDriveValidator)
+        {
+            RuleFor(c => c.GameDirectory).Cascade(CascadeMode.Stop)
+                .IsValidPath()
+                                       .SetValidator(rootFolderValidator)
+                                       .SetValidator(mappedNetworkDriveValidator)
+                                       .SetValidator(pathExistsValidator)
+                                       .When(c => c.GameDirectory.IsNotNullOrWhiteSpace())
+                                       .When(c => c.Host == "localhost" || c.Host == "127.0.0.1");
+        }
+    }
+}

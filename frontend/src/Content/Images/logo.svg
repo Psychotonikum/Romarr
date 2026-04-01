@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+
+<defs>
+<linearGradient id="neon" x1="0%" y1="0%" x2="100%" y2="100%">
+<stop offset="0%" stop-color="#ff2bd6"/>
+<stop offset="100%" stop-color="#00e5ff"/>
+</linearGradient>
+
+<filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+<feGaussianBlur stdDeviation="6" result="b"/>
+<feMerge>
+<feMergeNode in="b"/>
+<feMergeNode in="SourceGraphic"/>
+</feMerge>
+</filter>
+</defs>
+
+<!-- outer ring -->
+<circle cx="256" cy="256" r="228"
+fill="none"
+stroke="url(#neon)"
+stroke-width="12"
+filter="url(#glow)"/>
+
+<!-- NES controller body -->
+<rect x="110" y="200" width="292" height="140" rx="18"
+fill="none"
+stroke="url(#neon)"
+stroke-width="12"
+filter="url(#glow)"/>
+
+<!-- dpad -->
+<g stroke="#ff2bd6" stroke-width="12" stroke-linecap="round" filter="url(#glow)">
+<line x1="175" y1="270" x2="215" y2="270"/>
+<line x1="195" y1="250" x2="195" y2="290"/>
+</g>
+
+<!-- start / select -->
+<rect x="238" y="270" width="18" height="6" rx="3"
+fill="#00e5ff"
+filter="url(#glow)"/>
+
+<rect x="262" y="270" width="18" height="6" rx="3"
+fill="#00e5ff"
+filter="url(#glow)"/>
+
+<!-- SNES diamond buttons -->
+<g fill="none" stroke-width="9" filter="url(#glow)">
+<circle cx="335" cy="255" r="8" stroke="#00e5ff"/>
+<circle cx="355" cy="275" r="8" stroke="#ff2bd6"/>
+<circle cx="335" cy="295" r="8" stroke="#ffd400"/>
+<circle cx="315" cy="275" r="8" stroke="#00ff9c"/>
+</g>
+
+</svg>

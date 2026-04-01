@@ -1,0 +1,392 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import GameMonitorNewItemsOptionsPopoverContent from 'AddGame/GameMonitorNewItemsOptionsPopoverContent';
+import Form from 'Components/Form/Form';
+import FormGroup from 'Components/Form/FormGroup';
+import FormInputButton from 'Components/Form/FormInputButton';
+import FormInputGroup from 'Components/Form/FormInputGroup';
+import FormLabel from 'Components/Form/FormLabel';
+import Icon from 'Components/Icon';
+import Button from 'Components/Link/Button';
+import SpinnerErrorButton from 'Components/Link/SpinnerErrorButton';
+import ModalBody from 'Components/Modal/ModalBody';
+import ModalContent from 'Components/Modal/ModalContent';
+import ModalFooter from 'Components/Modal/ModalFooter';
+import ModalHeader from 'Components/Modal/ModalHeader';
+import Popover from 'Components/Tooltip/Popover';
+import Game from 'Game/Game';
+import MoveGameModal from 'Game/MoveGame/MoveGameModal';
+import { useSaveSeries, useSingleGame } from 'Game/useGame';
+import { usePendingChangesStore } from 'Helpers/Hooks/usePendingChangesStore';
+import usePrevious from 'Helpers/Hooks/usePrevious';
+import {
+  icons,
+  inputTypes,
+  kinds,
+  sizes,
+  tooltipPositions,
+} from 'Helpers/Props';
+import selectSettings from 'Store/Selectors/selectSettings';
+import { useQualityProfilesData } from 'Settings/Profiles/Quality/useQualityProfiles';
+import { InputChanged } from 'typings/inputs';
+import translate from 'Utilities/String/translate';
+import RootFolderModal from './RootFolder/RootFolderModal';
+import { RootFolderUpdated } from './RootFolder/RootFolderModalContent';
+import styles from './EditGameModalContent.css';
+
+export interface EditGameModalContentProps {
+  gameId: number;
+  onModalClose: () => void;
+  onDeleteGamePress: () => void;
+}
+function EditGameModalContent({
+  gameId,
+  onModalClose,
+  onDeleteGamePress,
+}: EditGameModalContentProps) {
+  const game = useSingleGame(gameId)!;
+
+  const {
+    title,
+    monitored,
+    monitorNewItems,
+    qualityProfileId,
+    path,
+    tags,
+    preferredRegions,
+    preferredLanguageIds,
+    preferredReleaseTypes,
+    preferredModifications,
+    rootFolderPath: initialRootFolderPath,
+  } = game;
+
+  const qualityProfiles = useQualityProfilesData();
+
+  const verifiedProfileId = useMemo(() => {
+    const profile = qualityProfiles.find((p) => p.name === 'Verified Only');
+    return profile?.id ?? 0;
+  }, [qualityProfiles]);
+
+  const anyProfileId = useMemo(() => {
+    const profile = qualityProfiles.find((p) => p.name === 'Any');
+    return profile?.id ?? 0;
+  }, [qualityProfiles]);
+
+  const { pendingChanges, setPendingChange } = usePendingChangesStore<Game>({});
+
+  const [isRootFolderModalOpen, setIsRootFolderModalOpen] = useState(false);
+  const [rootFolderPath, setRootFolderPath] = useState(initialRootFolderPath);
+  const isPathChanging = !!(
+    pendingChanges.path && path !== pendingChanges.path
+  );
+  const [isConfirmMoveModalOpen, setIsConfirmMoveModalOpen] = useState(false);
+
+  const { saveSeries, isSaving, saveError } = useSaveSeries(isPathChanging);
+  const wasSaving = usePrevious(isSaving);
+
+  const { settings, ...otherSettings } = useMemo(() => {
+    return selectSettings(
+      {
+        monitored,
+        monitorNewItems,
+        qualityProfileId,
+        path,
+        tags,
+        preferredRegions,
+        preferredLanguageIds,
+        preferredReleaseTypes,
+        preferredModifications,
+      },
+      pendingChanges,
+      saveError
+    );
+  }, [
+    monitored,
+    monitorNewItems,
+    qualityProfileId,
+    path,
+    tags,
+    preferredRegions,
+    preferredLanguageIds,
+    preferredReleaseTypes,
+    preferredModifications,
+    pendingChanges,
+    saveError,
+  ]);
+
+  const handleInputChange = useCallback(
+    ({ name, value }: InputChanged) => {
+      // @ts-expect-error name needs to be keyof Game
+      setPendingChange(name, value);
+    },
+    [setPendingChange]
+  );
+
+  const currentQualityProfileId =
+    (pendingChanges.qualityProfileId as number | undefined) ?? qualityProfileId;
+  const isVerifiedOnly = currentQualityProfileId === verifiedProfileId;
+
+  const handleVerifiedChange = useCallback(
+    ({ value }: InputChanged<boolean>) => {
+      setPendingChange(
+        'qualityProfileId',
+        value ? verifiedProfileId : anyProfileId
+      );
+    },
+    [verifiedProfileId, anyProfileId, setPendingChange]
+  );
+
+  const handleRootFolderPress = useCallback(() => {
+    setIsRootFolderModalOpen(true);
+  }, []);
+
+  const handleRootFolderModalClose = useCallback(() => {
+    setIsRootFolderModalOpen(false);
+  }, []);
+
+  const handleRootFolderChange = useCallback(
+    ({
+      path: newPath,
+      rootFolderPath: newRootFolderPath,
+    }: RootFolderUpdated) => {
+      setIsRootFolderModalOpen(false);
+      setRootFolderPath(newRootFolderPath);
+      handleInputChange({ name: 'path', value: newPath });
+    },
+    [handleInputChange]
+  );
+
+  const handleCancelPress = useCallback(() => {
+    setIsConfirmMoveModalOpen(false);
+  }, []);
+
+  const handleSavePress = useCallback(() => {
+    if (isPathChanging && !isConfirmMoveModalOpen) {
+      setIsConfirmMoveModalOpen(true);
+    } else {
+      setIsConfirmMoveModalOpen(false);
+
+      saveSeries({
+        ...game,
+        ...pendingChanges,
+      });
+    }
+  }, [
+    game,
+    isPathChanging,
+    isConfirmMoveModalOpen,
+    pendingChanges,
+    saveSeries,
+  ]);
+
+  const handleMoveGamePress = useCallback(() => {
+    setIsConfirmMoveModalOpen(false);
+
+    saveSeries({
+      ...game,
+      ...pendingChanges,
+    });
+  }, [game, pendingChanges, saveSeries]);
+
+  useEffect(() => {
+    if (!isSaving && wasSaving && !saveError) {
+      onModalClose();
+    }
+  }, [isSaving, wasSaving, saveError, onModalClose]);
+
+  return (
+    <ModalContent onModalClose={onModalClose}>
+      <ModalHeader>{translate('EditGameModalHeader', { title })}</ModalHeader>
+
+      <ModalBody>
+        <Form {...otherSettings}>
+          <FormGroup size={sizes.MEDIUM}>
+            <FormLabel>{translate('Monitored')}</FormLabel>
+
+            <FormInputGroup
+              type={inputTypes.CHECK}
+              name="monitored"
+              helpText={translate('MonitoredEpisodesHelpText')}
+              {...settings.monitored}
+              onChange={handleInputChange}
+            />
+          </FormGroup>
+
+          <FormGroup size={sizes.MEDIUM}>
+            <FormLabel>
+              {translate('MonitorNewSeasons')}
+              <Popover
+                anchor={<Icon className={styles.labelIcon} name={icons.INFO} />}
+                title={translate('MonitorNewSeasons')}
+                body={<GameMonitorNewItemsOptionsPopoverContent />}
+                position={tooltipPositions.RIGHT}
+              />
+            </FormLabel>
+
+            <FormInputGroup
+              type={inputTypes.MONITOR_NEW_ITEMS_SELECT}
+              name="monitorNewItems"
+              helpText={translate('MonitorNewSeasonsHelpText')}
+              {...settings.monitorNewItems}
+              onChange={handleInputChange}
+            />
+          </FormGroup>
+
+          <FormGroup size={sizes.MEDIUM}>
+            <FormLabel>{translate('VerifiedOnly')}</FormLabel>
+
+            <FormInputGroup
+              type={inputTypes.CHECK}
+              name="qualityProfileId"
+              helpText={translate('VerifiedOnlyHelpText')}
+              value={isVerifiedOnly}
+              onChange={handleVerifiedChange}
+            />
+          </FormGroup>
+
+          <FormGroup size={sizes.MEDIUM}>
+            <FormLabel>{translate('Path')}</FormLabel>
+
+            <FormInputGroup
+              type={inputTypes.PATH}
+              name="path"
+              {...settings.path}
+              buttons={[
+                <FormInputButton
+                  key="fileBrowser"
+                  kind={kinds.DEFAULT}
+                  title={translate('RootFolder')}
+                  onPress={handleRootFolderPress}
+                >
+                  <Icon name={icons.ROOT_FOLDER} />
+                </FormInputButton>,
+              ]}
+              includeFiles={false}
+              onChange={handleInputChange}
+            />
+          </FormGroup>
+
+          <FormGroup size={sizes.MEDIUM}>
+            <FormLabel>{translate('Tags')}</FormLabel>
+
+            <FormInputGroup
+              type={inputTypes.TAG}
+              name="tags"
+              {...settings.tags}
+              onChange={handleInputChange}
+            />
+          </FormGroup>
+
+          <FormGroup size={sizes.MEDIUM}>
+            <FormLabel>{translate('PreferredRegions')}</FormLabel>
+
+            <FormInputGroup
+              type={inputTypes.SELECT}
+              name="preferredRegions"
+              value={
+                (settings.preferredRegions?.value ?? []) as unknown as number[]
+              }
+              values={[
+                { key: 'USA', value: 'USA' },
+                { key: 'Europe', value: 'Europe' },
+                { key: 'Japan', value: 'Japan' },
+                { key: 'World', value: 'World' },
+                { key: 'Asia', value: 'Asia' },
+                { key: 'Australia', value: 'Australia' },
+                { key: 'Korea', value: 'Korea' },
+                { key: 'Brazil', value: 'Brazil' },
+              ]}
+              helpText={translate('PreferredRegionsHelpText')}
+              onChange={handleInputChange}
+            />
+          </FormGroup>
+
+          <FormGroup size={sizes.MEDIUM}>
+            <FormLabel>{translate('PreferredReleaseTypes')}</FormLabel>
+
+            <FormInputGroup
+              type={inputTypes.SELECT}
+              name="preferredReleaseTypes"
+              value={
+                (settings.preferredReleaseTypes?.value ??
+                  []) as unknown as number[]
+              }
+              values={[
+                { key: 'Retail', value: 'Retail' },
+                { key: 'Prototype', value: 'Prototype' },
+                { key: 'Beta', value: 'Beta' },
+                { key: 'Demo', value: 'Demo' },
+                { key: 'Sample', value: 'Sample' },
+                { key: 'Promo', value: 'Promo' },
+                { key: 'Update', value: 'Update' },
+                { key: 'Dlc', value: 'DLC' },
+              ]}
+              helpText={translate('PreferredReleaseTypesHelpText')}
+              onChange={handleInputChange}
+            />
+          </FormGroup>
+
+          <FormGroup size={sizes.MEDIUM}>
+            <FormLabel>{translate('PreferredModifications')}</FormLabel>
+
+            <FormInputGroup
+              type={inputTypes.SELECT}
+              name="preferredModifications"
+              value={
+                (settings.preferredModifications?.value ??
+                  []) as unknown as number[]
+              }
+              values={[
+                { key: 'Original', value: 'Original' },
+                { key: 'Hack', value: 'Hack' },
+                { key: 'Translation', value: 'Translation' },
+                { key: 'Homebrew', value: 'Homebrew' },
+                { key: 'Unlicensed', value: 'Unlicensed' },
+              ]}
+              helpText={translate('PreferredModificationsHelpText')}
+              onChange={handleInputChange}
+            />
+          </FormGroup>
+        </Form>
+      </ModalBody>
+
+      <ModalFooter>
+        <Button
+          className={styles.deleteButton}
+          kind={kinds.DANGER}
+          onPress={onDeleteGamePress}
+        >
+          {translate('Delete')}
+        </Button>
+
+        <Button onPress={onModalClose}>{translate('Cancel')}</Button>
+
+        <SpinnerErrorButton
+          error={saveError}
+          isSpinning={isSaving}
+          onPress={handleSavePress}
+        >
+          {translate('Save')}
+        </SpinnerErrorButton>
+      </ModalFooter>
+
+      <RootFolderModal
+        isOpen={isRootFolderModalOpen}
+        gameId={gameId}
+        rootFolderPath={rootFolderPath}
+        onSavePress={handleRootFolderChange}
+        onModalClose={handleRootFolderModalClose}
+      />
+
+      <MoveGameModal
+        originalPath={path}
+        destinationPath={pendingChanges.path}
+        isOpen={isConfirmMoveModalOpen}
+        onModalClose={handleCancelPress}
+        onSavePress={handleSavePress}
+        onMoveGamePress={handleMoveGamePress}
+      />
+    </ModalContent>
+  );
+}
+
+export default EditGameModalContent;

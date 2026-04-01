@@ -1,0 +1,186 @@
+using System.Linq;
+using NLog;
+using Romarr.Core.Configuration;
+using Romarr.Core.CustomFormats;
+using Romarr.Core.MediaFiles;
+using Romarr.Core.Parser.Model;
+
+namespace Romarr.Core.DecisionEngine.Specifications
+{
+    public class UpgradeDiskSpecification : IDownloadDecisionEngineSpecification
+    {
+        private readonly UpgradableSpecification _upgradableSpecification;
+        private readonly IConfigService _configService;
+        private readonly ICustomFormatCalculationService _formatService;
+        private readonly Logger _logger;
+
+        public UpgradeDiskSpecification(UpgradableSpecification upgradableSpecification,
+                                        IConfigService configService,
+                                        ICustomFormatCalculationService formatService,
+                                        Logger logger)
+        {
+            _configService = configService;
+            _upgradableSpecification = upgradableSpecification;
+            _formatService = formatService;
+            _logger = logger;
+        }
+
+        public SpecificationPriority Priority => SpecificationPriority.Default;
+        public RejectionType Type => RejectionType.Permanent;
+
+        public virtual DownloadSpecDecision IsSatisfiedBy(RemoteRom subject, ReleaseDecisionInformation information)
+        {
+            var qualityProfile = subject.Game.QualityProfile.Value;
+
+            if (subject.ParsedRomInfo.FullPlatform)
+            {
+                var totalGameFilesInPack = subject.Roms.Count;
+
+                if (totalGameFilesInPack == 0)
+                {
+                    // Should not happen, but good to guard against it.
+                    return DownloadSpecDecision.Accept();
+                }
+
+                // Count missing roms as upgradable
+                var missingGameFilesCount = subject.Roms.Count(c => c.RomFileId == 0);
+                var upgradedCount = missingGameFilesCount;
+                _logger.Debug("{0} roms are missing from disk and are considered upgradable.", upgradedCount);
+
+                // Filter for roms that already exist on disk to check for quality upgrades
+                var existingRomFiles = subject.Roms.Where(c => c.RomFileId != 0)
+                                                           .Select(c => c.RomFile.Value)
+                                                           .ToList();
+
+                // If all roms in the pack are missing, accept it immediately.
+                if (!existingRomFiles.Any())
+                {
+                    _logger.Debug("All roms in platform pack are missing, accepting.");
+                    return DownloadSpecDecision.Accept();
+                }
+
+                // Check if any of the existing files can also be upgraded
+                foreach (var file in existingRomFiles)
+                {
+                    _logger.Debug("Comparing file quality with report. Existing file is {0}.", file.Quality);
+
+                    if (!_upgradableSpecification.CutoffNotMet(qualityProfile,
+                            file.Quality,
+                            _formatService.ParseCustomFormat(file),
+                            subject.ParsedRomInfo.Quality))
+                    {
+                        _logger.Debug("Cutoff already met for existing file, not an upgrade.");
+                        continue;
+                    }
+
+                    var customFormats = _formatService.ParseCustomFormat(file);
+
+                    var upgradeableRejectReason = _upgradableSpecification.IsUpgradable(qualityProfile,
+                        file.Quality,
+                        customFormats,
+                        subject.ParsedRomInfo.Quality,
+                        subject.CustomFormats);
+
+                    if (upgradeableRejectReason == UpgradeableRejectReason.None)
+                    {
+                        _logger.Debug("Existing rom is upgradable.");
+                        upgradedCount++;
+                    }
+                }
+
+                var platformPackUpgrade = _configService.PlatformPackUpgrade;
+                var platformPackUpgradeThreshold = _configService.PlatformPackUpgradeThreshold;
+                _logger.Debug("Total upgradable roms: {0} out of {1}. Platform import setting: {2}, Threshold: {3}%", upgradedCount, totalGameFilesInPack, platformPackUpgrade, platformPackUpgradeThreshold);
+                var upgradablePercentage = (double)upgradedCount / totalGameFilesInPack * 100;
+                if (platformPackUpgrade == PlatformPackUpgradeType.Any)
+                {
+                    if (upgradedCount > 0)
+                    {
+                        return DownloadSpecDecision.Accept();
+                    }
+                }
+                else
+                {
+                    var threshold = platformPackUpgrade == PlatformPackUpgradeType.All
+                        ? 100.0
+                        : _configService.PlatformPackUpgradeThreshold;
+                    if (upgradablePercentage >= threshold)
+                    {
+                        return DownloadSpecDecision.Accept();
+                    }
+                }
+
+                return DownloadSpecDecision.Reject(DownloadRejectionReason.DiskNotUpgrade, $"Platform pack does not meet the upgrade criteria. Upgradable: {upgradedCount}/{totalGameFilesInPack} ({upgradablePercentage:0.##}%), Mode: {platformPackUpgrade}, Threshold: {platformPackUpgradeThreshold}%");
+            }
+
+            foreach (var file in subject.Roms.Where(c => c.RomFileId != 0).Select(c => c.RomFile.Value))
+            {
+                var decision = CheckUpgradeSpecification(file, qualityProfile, subject);
+                if (decision != null)
+                {
+                    return decision;
+                }
+            }
+
+            return DownloadSpecDecision.Accept();
+        }
+
+        private DownloadSpecDecision CheckUpgradeSpecification(Romarr.Core.MediaFiles.RomFile file, Romarr.Core.Profiles.Qualities.QualityProfile qualityProfile, RemoteRom subject)
+        {
+            if (file == null)
+            {
+                _logger.Debug("File is no longer available, skipping this file.");
+                return null;
+            }
+
+            _logger.Debug("Comparing file quality with report. Existing file is {0}.", file.Quality);
+
+            if (!_upgradableSpecification.CutoffNotMet(qualityProfile,
+                    file.Quality,
+                    _formatService.ParseCustomFormat(file),
+                    subject.ParsedRomInfo.Quality))
+            {
+                _logger.Debug("Cutoff already met, rejecting.");
+                var cutoff = qualityProfile.UpgradeAllowed ? qualityProfile.Cutoff : qualityProfile.FirststAllowedQuality().Id;
+                var qualityCutoff = qualityProfile.Items[qualityProfile.GetIndex(cutoff).Index];
+                return DownloadSpecDecision.Reject(DownloadRejectionReason.DiskCutoffMet, "Existing file meets cutoff: {0}", qualityCutoff);
+            }
+
+            var customFormats = _formatService.ParseCustomFormat(file);
+            var upgradeableRejectReason = _upgradableSpecification.IsUpgradable(qualityProfile,
+                file.Quality,
+                customFormats,
+                subject.ParsedRomInfo.Quality,
+                subject.CustomFormats);
+
+            switch (upgradeableRejectReason)
+            {
+                case UpgradeableRejectReason.None:
+                    return null;
+
+                case UpgradeableRejectReason.BetterQuality:
+                    return DownloadSpecDecision.Reject(DownloadRejectionReason.DiskHigherPreference, "Existing file on disk is of equal or higher preference: {0}", file.Quality);
+
+                case UpgradeableRejectReason.BetterRevision:
+                    return DownloadSpecDecision.Reject(DownloadRejectionReason.DiskHigherRevision, "Existing file on disk is of equal or higher revision: {0}", file.Quality.Revision);
+
+                case UpgradeableRejectReason.QualityCutoff:
+                    return DownloadSpecDecision.Reject(DownloadRejectionReason.DiskCutoffMet, "Existing file on disk meets quality cutoff: {0}", qualityProfile.Items[qualityProfile.GetIndex(qualityProfile.Cutoff).Index]);
+
+                case UpgradeableRejectReason.CustomFormatCutoff:
+                    return DownloadSpecDecision.Reject(DownloadRejectionReason.DiskCustomFormatCutoffMet, "Existing file on disk meets Custom Format cutoff: {0}", qualityProfile.CutoffFormatScore);
+
+                case UpgradeableRejectReason.CustomFormatScore:
+                    return DownloadSpecDecision.Reject(DownloadRejectionReason.DiskCustomFormatScore, "Existing file on disk has a equal or higher Custom Format score: {0}", qualityProfile.CalculateCustomFormatScore(customFormats));
+
+                case UpgradeableRejectReason.MinCustomFormatScore:
+                    return DownloadSpecDecision.Reject(DownloadRejectionReason.DiskCustomFormatScoreIncrement, "Existing file on disk has Custom Format score within Custom Format score increment: {0}", qualityProfile.MinUpgradeFormatScore);
+
+                case UpgradeableRejectReason.UpgradesNotAllowed:
+                    return DownloadSpecDecision.Reject(DownloadRejectionReason.DiskUpgradesNotAllowed, "Existing file on disk and Quality Profile '{0}' does not allow upgrades", qualityProfile.Name);
+            }
+
+            return null;
+        }
+    }
+}

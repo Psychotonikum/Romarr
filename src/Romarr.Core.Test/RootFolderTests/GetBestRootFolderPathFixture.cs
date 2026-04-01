@@ -1,0 +1,65 @@
+using System.Linq;
+using FluentAssertions;
+using NUnit.Framework;
+using Romarr.Core.RootFolders;
+using Romarr.Core.Test.Framework;
+using Romarr.Test.Common;
+
+namespace Romarr.Core.Test.RootFolderTests
+{
+    [TestFixture]
+    public class GetBestRootFolderPathFixture : CoreTest<RootFolderService>
+    {
+        private void GivenRootFolders(params string[] paths)
+        {
+            Mocker.GetMock<IRootFolderRepository>()
+                .Setup(s => s.All())
+                .Returns(paths.Select(p => new RootFolder { Path = p }));
+        }
+
+        [Test]
+        public void should_return_root_folder_that_is_parent_path()
+        {
+            GivenRootFolders(@"C:\Test\TV".AsOsAgnostic(), @"D:\Test\TV".AsOsAgnostic());
+            Subject.GetBestRootFolderPath(@"C:\Test\TV\Game Title".AsOsAgnostic()).Should().Be(@"C:\Test\TV".AsOsAgnostic());
+        }
+
+        [Test]
+        public void should_return_root_folder_that_is_grandparent_path()
+        {
+            GivenRootFolders(@"C:\Test\TV".AsOsAgnostic(), @"D:\Test\TV".AsOsAgnostic());
+            Subject.GetBestRootFolderPath(@"C:\Test\TV\S\Game Title".AsOsAgnostic()).Should().Be(@"C:\Test\TV".AsOsAgnostic());
+        }
+
+        [Test]
+        public void should_get_parent_path_from_os_path_if_matching_root_folder_is_not_found()
+        {
+            var gamePath = @"T:\Test\TV\Game Title".AsOsAgnostic();
+
+            GivenRootFolders(@"C:\Test\TV".AsOsAgnostic(), @"D:\Test\TV".AsOsAgnostic());
+            Subject.GetBestRootFolderPath(gamePath).Should().Be(@"T:\Test\TV".AsOsAgnostic());
+        }
+
+        [Test]
+        public void should_get_parent_path_from_os_path_if_matching_root_folder_is_not_found_for_posix_path()
+        {
+            WindowsOnly();
+
+            var gamePath = "/mnt/tv/Game Title";
+
+            GivenRootFolders(@"C:\Test\TV".AsOsAgnostic(), @"D:\Test\TV".AsOsAgnostic());
+            Subject.GetBestRootFolderPath(gamePath).Should().Be(@"/mnt/tv");
+        }
+
+        [Test]
+        public void should_get_parent_path_from_os_path_if_matching_root_folder_is_not_found_for_windows_path()
+        {
+            PosixOnly();
+
+            var gamePath = @"T:\Test\TV\Game Title";
+
+            GivenRootFolders(@"C:\Test\TV".AsOsAgnostic(), @"D:\Test\TV".AsOsAgnostic());
+            Subject.GetBestRootFolderPath(gamePath).Should().Be(@"T:\Test\TV");
+        }
+    }
+}

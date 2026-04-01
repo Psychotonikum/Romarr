@@ -1,0 +1,14 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net10.0</TargetFrameworks>
+    <OutputType>Library</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.3" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Romarr.Test.Common\Romarr.Test.Common.csproj" />
+    <ProjectReference Include="..\Romarr.Api.V3\Romarr.Api.V3.csproj" />
+    <ProjectReference Include="..\Romarr.Http\Romarr.Http.csproj" />
+  </ItemGroup>
+</Project>

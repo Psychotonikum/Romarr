@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net10.0</TargetFrameworks>
+
+    <ApplicationIcon>..\Romarr.Host\Romarr.ico</ApplicationIcon>
+  </PropertyGroup>
+  <PropertyGroup Condition="!$(RuntimeIdentifier.StartsWith('win'))">
+    <AssemblyName>Romarr</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Romarr.Host\Romarr.Host.csproj" />
+    <ProjectReference Include="..\Romarr.RuntimePatches\Romarr.RuntimePatches.csproj" />
+  </ItemGroup>
+</Project>
