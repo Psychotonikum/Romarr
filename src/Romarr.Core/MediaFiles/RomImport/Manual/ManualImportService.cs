@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using NLog;
 using Romarr.Common.Disk;
 using Romarr.Common.Extensions;
@@ -93,21 +94,27 @@ namespace Romarr.Core.MediaFiles.GameFileImport.Manual
                 var unmappedFiles = MediaFileService.FilterExistingFiles(mediaFiles, seriesFiles, game);
 
                 items.AddRange(unmappedFiles.Select(file =>
-                    new ManualImportItem
+                {
+                    var platform = DetectPlatformNumber(game, file);
+                    var matchedRoms = MatchSwitchRom(game, file, platform);
+
+                    return new ManualImportItem
                     {
                         Path = Path.Combine(game.Path, file),
                         FolderName = directoryInfo.Name,
                         RelativePath = game.Path.GetRelativePath(file),
                         Name = Path.GetFileNameWithoutExtension(file),
                         Game = game,
-                        PlatformNumber = DetectPlatformNumber(game, file),
-                        Roms = new List<Rom>(),
+                        PlatformNumber = platform,
+                        Roms = matchedRoms,
                         ReleaseGroup = string.Empty,
                         Quality = new QualityModel(Quality.Unknown),
                         Languages = new List<Language> { Language.Unknown },
                         Size = _diskProvider.GetFileSize(file),
+                        ReleaseType = matchedRoms.Count == 1 ? ReleaseType.SingleGameFile : ReleaseType.Unknown,
                         Rejections = Enumerable.Empty<ImportRejection>()
-                    }));
+                    };
+                }));
             }
 
             return items;
@@ -143,6 +150,7 @@ namespace Romarr.Core.MediaFiles.GameFileImport.Manual
 
         public ManualImportItem ReprocessItem(string path, string downloadId, int gameId, int? platformNumber, List<int> romIds, string releaseGroup, QualityModel quality, List<Language> languages, int indexerFlags, ReleaseType releaseType)
         {
+            quality ??= new QualityModel(Quality.Unknown);
             var rootFolder = Path.GetDirectoryName(path);
             var game = _gameService.GetGame(gameId);
 
@@ -422,6 +430,7 @@ namespace Romarr.Core.MediaFiles.GameFileImport.Manual
             item.RelativePath = rootFolder.GetRelativePath(decision.LocalGameFile.Path);
             item.Name = Path.GetFileNameWithoutExtension(decision.LocalGameFile.Path);
             item.DownloadId = downloadId;
+            item.Rejections = decision.Rejections;
 
             if (decision.LocalGameFile.Roms.Any() && decision.LocalGameFile.Roms.Select(c => c.PlatformNumber).Distinct().Count() == 1)
             {
@@ -444,15 +453,22 @@ namespace Romarr.Core.MediaFiles.GameFileImport.Manual
             else if (decision.LocalGameFile.Game != null)
             {
                 item.PlatformNumber = DetectPlatformNumber(decision.LocalGameFile.Game, item.Path);
+                item.Roms = MatchSwitchRom(decision.LocalGameFile.Game, item.Path, item.PlatformNumber);
+                if (item.Roms.Count == 1)
+                {
+                    decision.LocalGameFile.Roms = item.Roms;
+                    item.Rejections = decision.Rejections.Where(rejection => rejection.Reason != ImportRejectionReason.UnableToParse).ToList();
+                }
             }
 
             item.ReleaseGroup = decision.LocalGameFile.ReleaseGroup;
-            item.Quality = decision.LocalGameFile.Quality;
+            item.Quality = decision.LocalGameFile.Quality ?? new QualityModel(Quality.Unknown);
             item.Languages = decision.LocalGameFile.Languages;
             item.Size = _diskProvider.GetFileSize(decision.LocalGameFile.Path);
-            item.Rejections = decision.Rejections;
             item.IndexerFlags = (int)decision.LocalGameFile.IndexerFlags;
-            item.ReleaseType = decision.LocalGameFile.ReleaseType;
+            item.ReleaseType = decision.LocalGameFile.ReleaseType == ReleaseType.Unknown && item.Roms?.Count == 1
+                ? ReleaseType.SingleGameFile
+                : decision.LocalGameFile.ReleaseType;
 
             if (decision.LocalGameFile.Game != null)
             {
@@ -466,6 +482,46 @@ namespace Romarr.Core.MediaFiles.GameFileImport.Manual
             }
 
             return item;
+        }
+
+        private List<Rom> MatchSwitchRom(Game game, string path, int? platformNumber)
+        {
+            if (!platformNumber.HasValue || !game.Platforms.Any(p =>
+                p.PlatformNumber == platformNumber && p.Title?.Contains("Switch", StringComparison.OrdinalIgnoreCase) == true) ||
+                !new[] { ".nsp", ".nsz", ".xci", ".xcz" }.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase))
+            {
+                return new List<Rom>();
+            }
+
+            var name = Path.GetFileNameWithoutExtension(path);
+            var roms = _romService.GetRomsByPlatform(game.Id, platformNumber.Value);
+            if (Regex.IsMatch(name, @"\[BASE\]", RegexOptions.IgnoreCase))
+            {
+                var bases = roms.Where(r => r.RomType == RomFileType.Base).ToList();
+                return bases.Count == 1 ? bases : new List<Rom>();
+            }
+
+            if (Regex.IsMatch(name, @"\[UPDATE\]", RegexOptions.IgnoreCase))
+            {
+                var version = Regex.Match(name, @"\[v(\d+)\]", RegexOptions.IgnoreCase);
+                var updates = roms.Where(r => r.RomType == RomFileType.Update && version.Success &&
+                    Regex.IsMatch(r.Title ?? string.Empty, $@"\bv{version.Groups[1].Value}\b", RegexOptions.IgnoreCase)).ToList();
+                return updates.Count == 1 ? updates : new List<Rom>();
+            }
+
+            var pack = Regex.Match(name, @"\bDLC[\s._-]*Pack[\s._-]*(\d+)\b", RegexOptions.IgnoreCase);
+
+            if (!pack.Success || !int.TryParse(pack.Groups[1].Value, out var packNumber) || packNumber <= 0)
+            {
+                return new List<Rom>();
+            }
+
+            return roms
+                .Where(r => r.RomType == RomFileType.Dlc)
+                .OrderBy(r => r.FileNumber)
+                .Skip(packNumber - 1)
+                .Take(1)
+                .ToList();
         }
 
         private static int? DetectPlatformNumber(Game game, string path)

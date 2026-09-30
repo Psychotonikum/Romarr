@@ -5,9 +5,9 @@ export default function getReleaseTypeName(
   releaseType?: ReleaseType
 ): string | null {
   switch (releaseType) {
-    case 'singleFile':
+    case 'singleGameFile':
       return translate('SingleEpisode');
-    case 'multiFile':
+    case 'multiGameFile':
       return translate('MultiEpisode');
     case 'platformPack':
       return translate('PlatformPack');

@@ -1,3 +1,7 @@
-type ReleaseType = 'unknown' | 'singleFile' | 'multiFile' | 'platformPack';
+type ReleaseType =
+  | 'unknown'
+  | 'singleGameFile'
+  | 'multiGameFile'
+  | 'platformPack';
 
 export default ReleaseType;

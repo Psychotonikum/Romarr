@@ -20,13 +20,13 @@ const options = [
     },
   },
   {
-    key: 'singleFile',
+    key: 'singleGameFile',
     get value() {
       return translate('SingleEpisode');
     },
   },
   {
-    key: 'multiFile',
+    key: 'multiGameFile',
     get value() {
       return translate('MultiEpisode');
     },

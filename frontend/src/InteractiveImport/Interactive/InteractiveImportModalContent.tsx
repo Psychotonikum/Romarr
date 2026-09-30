@@ -533,13 +533,6 @@ function InteractiveImportModalContentInner(
           return;
         }
 
-        if (!quality) {
-          setInteractiveImportErrorMessage(
-            translate('InteractiveImportNoQuality')
-          );
-          return;
-        }
-
         if (!languages) {
           setInteractiveImportErrorMessage(
             translate('InteractiveImportNoLanguage')

@@ -77,6 +77,10 @@ function SelectRomModalContentInner(props: SelectRomModalContentProps) {
     platformNumber,
     isSelection: true,
   });
+  const platformRoms = useMemo(
+    () => data.filter((rom) => rom.platformNumber === platformNumber),
+    [data, platformNumber]
+  );
 
   const { sortKey, sortDirection } = useRomSelectionOptions();
 
@@ -126,7 +130,7 @@ function SelectRomModalContentInner(props: SelectRomModalContentProps) {
   const onFilesSelectWrapper = useCallback(() => {
     const romIds: number[] = getSelectedIds();
 
-    const selectedFiles = data.reduce((acc: Rom[], item) => {
+    const selectedFiles = platformRoms.reduce((acc: Rom[], item) => {
       if (romIds.indexOf(item.id) > -1) {
         acc.push(item);
       }
@@ -153,7 +157,7 @@ function SelectRomModalContentInner(props: SelectRomModalContentProps) {
     });
 
     onFilesSelect(mappedFiles);
-  }, [selectedIds, data, getSelectedIds, onFilesSelect]);
+  }, [selectedIds, platformRoms, getSelectedIds, onFilesSelect]);
 
   let details = selectedDetails;
 
@@ -165,11 +169,11 @@ function SelectRomModalContentInner(props: SelectRomModalContentProps) {
   }
 
   const { data: items } = useMemo(() => {
-    return clientSideFilterAndSort<Rom>(data, {
+    return clientSideFilterAndSort<Rom>(platformRoms, {
       sortKey,
       sortDirection,
     });
-  }, [data, sortKey, sortDirection]);
+  }, [platformRoms, sortKey, sortDirection]);
 
   return (
     <ModalContent onModalClose={onModalClose}>
@@ -225,7 +229,7 @@ function SelectRomModalContentInner(props: SelectRomModalContentProps) {
             </Table>
           ) : null}
 
-          {isFetched && !data.length
+          {isFetched && !platformRoms.length
             ? translate('NoEpisodesFoundForSelectedSeason')
             : null}
         </Scroller>
@@ -256,9 +260,13 @@ function SelectRomModalContent(props: SelectRomModalContentProps) {
     platformNumber: props.platformNumber,
     isSelection: true,
   });
+  const platformRoms = useMemo(
+    () => data.filter((rom) => rom.platformNumber === props.platformNumber),
+    [data, props.platformNumber]
+  );
 
   return (
-    <SelectProvider items={data}>
+    <SelectProvider items={platformRoms}>
       <SelectRomModalContentInner {...props} />
     </SelectProvider>
   );

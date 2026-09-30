@@ -128,7 +128,6 @@ function InteractiveImportRow(props: InteractiveImportRowProps) {
         game &&
         platformNumber != null &&
         roms.length &&
-        quality &&
         languages &&
         size > 0
       ) {
@@ -149,7 +148,6 @@ function InteractiveImportRow(props: InteractiveImportRowProps) {
       game &&
       platformNumber != null &&
       roms.length &&
-      quality &&
       languages
     );
 
@@ -158,16 +156,7 @@ function InteractiveImportRow(props: InteractiveImportRowProps) {
     } else {
       onValidRowChange(id, true);
     }
-  }, [
-    id,
-    game,
-    platformNumber,
-    roms,
-    quality,
-    languages,
-    isSelected,
-    onValidRowChange,
-  ]);
+  }, [id, game, platformNumber, roms, languages, isSelected, onValidRowChange]);
 
   const handleSelectedChange = useCallback(
     (result: SelectStateInputProps) => {
@@ -373,13 +362,7 @@ function InteractiveImportRow(props: InteractiveImportRowProps) {
   const gameTitle = game ? game.title : '';
 
   const romInfo = roms.map((rom) => {
-    return (
-      <div key={rom.id}>
-        {rom.romNumber}
-
-        {` - ${rom.title}`}
-      </div>
-    );
+    return <div key={rom.id}>{rom.title}</div>;
   });
 
   const requiresPlatformNumber = isNaN(Number(platformNumber));
@@ -389,7 +372,6 @@ function InteractiveImportRow(props: InteractiveImportRowProps) {
   const showRomNumbersPlaceholder =
     isSelected && Number.isInteger(platformNumber) && !roms.length;
   const showReleaseGroupPlaceholder = isSelected && !releaseGroup;
-  const showQualityPlaceholder = isSelected && !quality;
   const showLanguagePlaceholder = isSelected && !languages;
   const showIndexerFlagsPlaceholder = isSelected && !indexerFlags;
 
@@ -429,7 +411,9 @@ function InteractiveImportRow(props: InteractiveImportRowProps) {
         {showPlatformNumberPlaceholder ? (
           <InteractiveImportRowCellPlaceholder />
         ) : (
-          platformNumber
+          game?.platforms?.find(
+            (platform) => platform.platformNumber === platformNumber
+          )?.title || platformNumber
         )}
 
         {isReprocessing && platformNumber == null ? (
@@ -469,10 +453,10 @@ function InteractiveImportRow(props: InteractiveImportRowProps) {
         title={translate('ClickToChangeQuality')}
         onPress={onSelectQualityPress}
       >
-        {showQualityPlaceholder && <InteractiveImportRowCellPlaceholder />}
-
-        {!showQualityPlaceholder && !!quality && (
+        {quality ? (
           <RomQuality className={styles.label} quality={quality} />
+        ) : (
+          translate('Unknown')
         )}
       </TableRowCellButton>
 

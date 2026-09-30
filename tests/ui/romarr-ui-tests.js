@@ -434,7 +434,6 @@ async function testNavigationPages() {
     { name: 'Wanted/Missing', path: '/wanted/missing' },
     { name: 'Settings/General', path: '/settings/general' },
     { name: 'System/Status', path: '/system/status' },
-    { name: 'Game Import (Scraper)', path: '/add/scrape' },
   ];
 
   for (const { name, path } of pages) {
@@ -451,62 +450,16 @@ async function testNavigationPages() {
       await page.close();
     });
   }
-}
-
-async function testScraperImport() {
-  console.log('\n--- Scraper Import Feature ---');
-
-  await test('Scraper import scan API returns results for /media/roms', async () => {
-    const { status, body } = await httpRequest('GET', apiV5Url('game/scraperimport?path=/media/roms'));
-    assert(status === 200, `Expected 200, got ${status}`);
-    assert(Array.isArray(body), 'Expected array response');
-    // /media/roms has files from mass import
-  });
-
-  await test('Scraper import scan API returns empty for non-existent path', async () => {
-    const { status, body } = await httpRequest('GET', apiV5Url('game/scraperimport?path=/nonexistent'));
-    assert(status === 200, `Expected 200, got ${status}`);
-    assert(Array.isArray(body) && body.length === 0, 'Expected empty array for bad path');
-  });
-
-  await test('Scraper import page renders with scan controls', async () => {
-    const page = await newPage();
-    await page.goto(`${BASE}/add/scrape`, { waitUntil: 'networkidle2', timeout: 20000 });
-    await new Promise((r) => setTimeout(r, 3000));
-    const text = await page.evaluate(() => document.body.innerText);
-    assert(text.includes('Game Import'), 'Missing "Game Import" heading');
-    assert(text.includes('Scan'), 'Missing "Scan" button');
-    await page.close();
-  });
-
-  await test('Game Import link appears in sidebar', async () => {
+  await test('Removed import links are absent from sidebar', async () => {
     const page = await newPage();
     await page.goto(`${BASE}/`, { waitUntil: 'networkidle2', timeout: 20000 });
     await new Promise((r) => setTimeout(r, 3000));
-    const hasLink = await page.evaluate(() => {
-      const links = Array.from(document.querySelectorAll('a'));
-      return links.some((l) => l.href.includes('/add/scrape') || l.textContent.includes('Game Import'));
+    const hasRemovedLink = await page.evaluate(() => {
+      const links = Array.from(document.querySelectorAll('a[href]'));
+      return links.some((link) => ['/add/import', '/add/scrape'].includes(new URL(link.href).pathname));
     });
-    assert(hasLink, 'Game Import sidebar link not found');
+    assert(!hasRemovedLink, 'Removed import link still appears in sidebar');
     await page.close();
-  });
-
-  await test('Scraper import POST API processes requests', async () => {
-    // Import a test game with no actual files (test error handling)
-    const { status, body } = await httpRequest('POST', apiV5Url('game/scraperimport'), [
-      {
-        gameName: 'E2E Test Game',
-        systemFolder: 'gbc',
-        igdbId: 0,
-        qualityProfileId: 1,
-        files: [],
-      },
-    ]);
-    assert(status === 200, `Expected 200, got ${status}`);
-    assert(Array.isArray(body), 'Expected array response');
-    assert(body.length === 1, `Expected 1 result, got ${body.length}`);
-    assert(body[0].gameName === 'E2E Test Game', 'Wrong game name in result');
-    assert(body[0].success === true, 'Expected success=true');
   });
 }
 
@@ -533,7 +486,6 @@ async function testScraperImport() {
     await testPlatformDisplay();
     await testNavigationPages();
     await testMobileLayout();
-    await testScraperImport();
   } finally {
     await cleanup();
     await browser.close();
