@@ -122,7 +122,7 @@ for RID in "${RUNTIMES[@]}"; do
         PLATFORM=Posix
     fi
 
-    # Use the same msbuild approach as CI: builds entire solution with PublishAllRids
+    # Build the solution with PublishAllRids
     dotnet msbuild -restore src/Romarr.sln \
         -p:SelfContained=true \
         -p:Configuration=Release \
@@ -133,7 +133,7 @@ for RID in "${RUNTIMES[@]}"; do
 
     echo "Backend build complete for $RID"
 
-    # Package the output (mirrors CI packaging logic)
+    # Package the published output
     publishDir="_output/$FRAMEWORK/$RID/publish"
     updatePublishDir="_output/Romarr.Update/$FRAMEWORK/$RID/publish"
     packageDir="_release/$RID/Romarr"

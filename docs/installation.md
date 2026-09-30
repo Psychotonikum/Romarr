@@ -9,9 +9,9 @@
 | RAM | 512 MB | 1 GB+ |
 | Disk | 200 MB (application) + ROM storage | SSD for database |
 
-## Method 1: Debian/Ubuntu (Recommended)
+## Method 1: Debian/Ubuntu
 
-The install script sets up Romarr as a systemd service. It handles both fresh installs and updates.
+The install script sets up Romarr as a systemd service. It handles both fresh installs and updates. Downloading the latest release requires a published GitHub release; this repository does not publish releases automatically.
 
 ```bash
 # Download and run the install script
@@ -45,7 +45,9 @@ journalctl -u romarr -f    # View logs
 
 **Updating:**
 
-Run the install script again. It detects the existing installation, stops the service, replaces the binaries, and restarts.
+Run the install script again when a release is available. It detects the existing installation, stops the service, replaces the binaries, and restarts.
+
+For a local build instead, follow the [source and release-package instructions](../README.md#from-source), then pass the archive to `distribution/debian/install.sh --tarball`.
 
 ## Method 2: Docker
 

@@ -1,9 +1,0 @@
- changelog:
-  exclude:
-    authors:
-      - Weblate
-      - RomarrBot
-  categories:
-    - title: Changes
-      labels:
-        - '*'

@@ -31,7 +31,7 @@ Technical architecture of Romarr, forked from [Sonarr](https://github.com/Sonarr
 │  ┌──────────────────────┴──────────────────────────┐   │
 │  │            Data Access (Dapper + SQLite)          │   │
 │  │  ┌──────────────┐  ┌────────────────────────┐   │   │
-│  │  │ Repositories │  │ FluentMigrator (223)   │   │   │
+│  │  │ Repositories │  │ FluentMigrator         │   │   │
 │  │  │ TableMapping │  │ Schema Migrations      │   │   │
 │  │  └──────────────┘  └────────────────────────┘   │   │
 │  └──────────────────────────────────────────────────┘   │
@@ -93,7 +93,7 @@ Mapper.Entity<Rom>("Episodes");     // Rom class → Episodes table (Sonarr lega
 Mapper.Entity<RomFile>("EpisodeFiles"); // RomFile class → EpisodeFiles table (Sonarr legacy)
 ```
 
-Tables keep original Sonarr names because 223 FluentMigrator migrations define the historical schema using those names. Video qualities like 720p, 1080p, HDTV, and Bluray are legacy aliases that map to "Unknown" quality. Romarr's actual qualities are: Unknown, Bad, and Verified.
+Tables keep original Sonarr names because existing FluentMigrator migrations define the historical schema using those names. Video qualities like 720p, 1080p, HDTV, and Bluray are legacy aliases that map to "Unknown" quality. Romarr's actual qualities are: Unknown, Bad, and Verified.
 
 ### Migrations
 Sequential numbered migrations in `Datastore/Migration/`. Each migration runs exactly once. Never modify existing migrations — always add new ones.
@@ -104,7 +104,7 @@ Sequential numbered migrations in `Datastore/Migration/`. Each migration runs ex
 - React 18 with TypeScript
 - CSS Modules for scoped styling
 - webpack 5 for bundling
-- Custom Redux-like state management
+- Redux and Zustand state management
 
 ### Structure
 The SPA is organized by feature:

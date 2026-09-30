@@ -40,6 +40,8 @@ services:
 
 ### Debian/Ubuntu
 
+The installer downloads a published GitHub release by default. If no release is available, build a [local archive](../README.md#from-source) and pass it to `distribution/debian/install.sh --tarball` instead.
+
 ```bash
 git clone https://github.com/Psychotonikum/Romarr.git
 cd romarr/distribution/debian
