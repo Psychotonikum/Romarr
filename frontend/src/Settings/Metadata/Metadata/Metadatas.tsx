@@ -18,7 +18,7 @@ function Metadatas() {
         isPopulated={isFetched}
       >
         <div className={styles.metadatas}>
-          {items.map((item) => {
+          {items.filter((item) => item.implementation !== 'PlexMetadata').map((item) => {
             return <Metadata key={item.id} {...item} />;
           })}
         </div>
