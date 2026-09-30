@@ -5,11 +5,12 @@ import styles from './SelectPlatformRow.css';
 
 interface SelectPlatformRowProps {
   platformNumber: number;
+  title?: string;
   onSeasonSelect(platform: number): unknown;
 }
 
 function SelectPlatformRow(props: SelectPlatformRowProps) {
-  const { platformNumber, onSeasonSelect } = props;
+  const { platformNumber, title, onSeasonSelect } = props;
 
   const onSeasonSelectWrapper = useCallback(() => {
     onSeasonSelect(platformNumber);
@@ -24,6 +25,7 @@ function SelectPlatformRow(props: SelectPlatformRowProps) {
       {platformNumber === 0
         ? translate('Specials')
         : translate('PlatformNumberToken', { platformNumber })}
+      {title ? ` - ${title}` : null}
     </Link>
   );
 }

@@ -100,7 +100,7 @@ namespace Romarr.Core.MediaFiles.GameFileImport.Manual
                         RelativePath = game.Path.GetRelativePath(file),
                         Name = Path.GetFileNameWithoutExtension(file),
                         Game = game,
-                        PlatformNumber = null,
+                        PlatformNumber = DetectPlatformNumber(game, file),
                         Roms = new List<Rom>(),
                         ReleaseGroup = string.Empty,
                         Quality = new QualityModel(Quality.Unknown),
@@ -227,7 +227,9 @@ namespace Romarr.Core.MediaFiles.GameFileImport.Manual
                     ReleaseType = releaseType
                 };
 
-                return MapItem(new ImportDecision(localRom, new ImportRejection(ImportRejectionReason.NoGameFiles, "Roms not selected")), rootFolder, downloadId, null);
+                var item = MapItem(new ImportDecision(localRom, new ImportRejection(ImportRejectionReason.NoGameFiles, "Roms not selected")), rootFolder, downloadId, null);
+                item.PlatformNumber = platformNumber;
+                return item;
             }
 
             return ProcessFile(rootFolder, rootFolder, path, downloadId, game);
@@ -439,6 +441,10 @@ namespace Romarr.Core.MediaFiles.GameFileImport.Manual
                     item.Roms = decision.LocalGameFile.Roms;
                 }
             }
+            else if (decision.LocalGameFile.Game != null)
+            {
+                item.PlatformNumber = DetectPlatformNumber(decision.LocalGameFile.Game, item.Path);
+            }
 
             item.ReleaseGroup = decision.LocalGameFile.ReleaseGroup;
             item.Quality = decision.LocalGameFile.Quality;
@@ -451,11 +457,62 @@ namespace Romarr.Core.MediaFiles.GameFileImport.Manual
             if (decision.LocalGameFile.Game != null)
             {
                 item.Game = decision.LocalGameFile.Game;
-                item.CustomFormats = _localRomFormatCalculator.ParseGameFileCustomFormats(decision.LocalGameFile);
-                item.CustomFormatScore = item.Game.QualityProfile?.Value.CalculateCustomFormatScore(item.CustomFormats) ?? 0;
+
+                if (item.Roms?.Any() == true)
+                {
+                    item.CustomFormats = _localRomFormatCalculator.ParseGameFileCustomFormats(decision.LocalGameFile);
+                    item.CustomFormatScore = item.Game.QualityProfile?.Value.CalculateCustomFormatScore(item.CustomFormats) ?? 0;
+                }
             }
 
             return item;
+        }
+
+        private static int? DetectPlatformNumber(Game game, string path)
+        {
+            var parsed = Parser.Parser.ParseTitle(Path.GetFileName(path));
+
+            if (parsed != null && !parsed.IsMiniSeries && (parsed.IsMultiPlatform || parsed.RomNumbers.Any() || parsed.FullPlatform))
+            {
+                return !parsed.IsMultiPlatform && game.Platforms.Any(p => p.PlatformNumber == parsed.PlatformNumber)
+                    ? parsed.PlatformNumber
+                    : null;
+            }
+
+            var folderName = Path.GetFileName(Path.GetDirectoryName(path));
+            var matchingPlatforms = game.Platforms.Where(p => p.Title.IsNotNullOrWhiteSpace() &&
+                p.Title.Equals(folderName, StringComparison.OrdinalIgnoreCase)).ToList();
+
+            if (matchingPlatforms.Count == 1)
+            {
+                return matchingPlatforms[0].PlatformNumber;
+            }
+
+            var extension = Path.GetExtension(path);
+            var systems = DefaultGameSystems.GetDefaults()
+                .Where(system => system.FileExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase)).ToList();
+            var exactMatches = systems
+                .SelectMany(system => game.Platforms.Where(platform =>
+                    string.Equals(platform.Title, system.Name, StringComparison.OrdinalIgnoreCase)))
+                .Select(platform => platform.PlatformNumber).Distinct().ToList();
+
+            if (exactMatches.Count > 0)
+            {
+                return exactMatches.Count == 1 ? exactMatches[0] : null;
+            }
+
+            var extensionMatches = systems
+                .SelectMany(system => game.Platforms.Where(platform => platform.Title.IsNotNullOrWhiteSpace() &&
+                    (platform.Title.Contains(system.Name, StringComparison.OrdinalIgnoreCase) ||
+                     system.Name.Contains(platform.Title, StringComparison.OrdinalIgnoreCase))))
+                .Select(platform => platform.PlatformNumber).Distinct().ToList();
+
+            if (extensionMatches.Count == 1)
+            {
+                return extensionMatches[0];
+            }
+
+            return game.Platforms.Count == 1 ? game.Platforms[0].PlatformNumber : null;
         }
 
         private ManualImportItem MapItem(RomFile romFile, Game game, string folderName, List<Rom> roms)

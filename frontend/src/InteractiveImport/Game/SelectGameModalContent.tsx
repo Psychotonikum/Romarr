@@ -7,6 +7,9 @@ import React, {
   useState,
 } from 'react';
 import { FixedSizeList as List, ListChildComponentProps } from 'react-window';
+import AddGame from 'AddGame/AddGame';
+import AddNewGameModal from 'AddGame/AddNewGame/AddNewGameModal';
+import { useLookupSeries } from 'AddGame/AddNewGame/useAddGame';
 import TextInput from 'Components/Form/TextInput';
 import Button from 'Components/Link/Button';
 import ModalBody from 'Components/Modal/ModalBody';
@@ -18,7 +21,8 @@ import Column from 'Components/Table/Column';
 import VirtualTableRowButton from 'Components/Table/VirtualTableRowButton';
 import Game from 'Game/Game';
 import useGame from 'Game/useGame';
-import { scrollDirections } from 'Helpers/Props';
+import useDebounce from 'Helpers/Hooks/useDebounce';
+import { kinds, scrollDirections } from 'Helpers/Props';
 import dimensions from 'Styles/Variables/dimensions';
 import { InputChanged } from 'typings/inputs';
 import sortByProp from 'Utilities/Array/sortByProp';
@@ -64,6 +68,22 @@ interface RowItemData {
   onSeriesSelect(gameId: number): void;
 }
 
+interface NewGameResultProps {
+  game: AddGame;
+  onSelect(game: AddGame): void;
+}
+
+function NewGameResult({ game, onSelect }: NewGameResultProps) {
+  const handlePress = useCallback(() => onSelect(game), [game, onSelect]);
+
+  return (
+    <Button kind={kinds.PRIMARY} onPress={handlePress}>
+      {translate('AddNew')}: {game.title}
+      {game.year ? ` (${game.year})` : ''}
+    </Button>
+  );
+}
+
 function Row({ index, style, data }: ListChildComponentProps<RowItemData>) {
   const { items, onSeriesSelect } = data;
   const game = index >= items.length ? null : items[index];
@@ -105,6 +125,12 @@ function SelectGameModalContent(props: SelectGameModalContentProps) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const { data: allGames = [] } = useGame();
   const [filter, setFilter] = useState('');
+  const [newGame, setNewGame] = useState<AddGame | null>(null);
+  const lookupTerm = useDebounce(filter, 300);
+  const { data: lookupResults, isFetching: isLookingUp } = useLookupSeries(
+    lookupTerm,
+    lookupTerm.trim().length > 1
+  );
   const [size, setSize] = useState({ width: 0, height: 0 });
   const windowHeight = window.innerHeight;
 
@@ -161,6 +187,15 @@ function SelectGameModalContent(props: SelectGameModalContentProps) {
     [allGames, onSeriesSelect]
   );
 
+  const onGameAdded = useCallback(
+    (game: Game) => {
+      onSeriesSelect(game);
+    },
+    [onSeriesSelect]
+  );
+
+  const onNewGameModalClose = useCallback(() => setNewGame(null), []);
+
   const sortedSeries = useMemo(
     () => [...allGames].sort(sortByProp('sortTitle')),
     [allGames]
@@ -194,6 +229,23 @@ function SelectGameModalContent(props: SelectGameModalContentProps) {
           onChange={onFilterChange}
         />
 
+        {filter.trim().length > 1 && lookupTerm === filter && !isLookingUp ? (
+          <div className={styles.lookupResults}>
+            {lookupResults
+              .filter(
+                (result) =>
+                  !allGames.some((game) => game.igdbId === result.igdbId)
+              )
+              .map((result) => (
+                <NewGameResult
+                  key={result.igdbId}
+                  game={result}
+                  onSelect={setNewGame}
+                />
+              ))}
+          </div>
+        ) : null}
+
         <Scroller
           ref={scrollerRef}
           className={styles.scroller}
@@ -225,6 +277,15 @@ function SelectGameModalContent(props: SelectGameModalContentProps) {
       <ModalFooter>
         <Button onPress={onModalClose}>{translate('Cancel')}</Button>
       </ModalFooter>
+
+      {newGame ? (
+        <AddNewGameModal
+          isOpen={true}
+          game={newGame}
+          onGameAdded={onGameAdded}
+          onModalClose={onNewGameModalClose}
+        />
+      ) : null}
     </ModalContent>
   );
 }

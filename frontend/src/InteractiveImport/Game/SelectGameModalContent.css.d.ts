@@ -2,6 +2,7 @@
 // Please do not change this file!
 interface CssExports {
   'filterInput': string;
+  'lookupResults': string;
   'modalBody': string;
   'scroller': string;
 }

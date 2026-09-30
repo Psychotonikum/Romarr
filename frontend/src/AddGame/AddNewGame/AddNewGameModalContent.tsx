@@ -20,11 +20,12 @@ import ModalContent from 'Components/Modal/ModalContent';
 import ModalFooter from 'Components/Modal/ModalFooter';
 import ModalHeader from 'Components/Modal/ModalHeader';
 import Popover from 'Components/Tooltip/Popover';
+import Game from 'Game/Game';
 import GamePoster from 'Game/GamePoster';
 import { getValidationFailures } from 'Helpers/Hooks/useApiMutation';
 import { icons, inputTypes, kinds, tooltipPositions } from 'Helpers/Props';
-import selectSettings from 'Store/Selectors/selectSettings';
 import { useQualityProfilesData } from 'Settings/Profiles/Quality/useQualityProfiles';
+import selectSettings from 'Store/Selectors/selectSettings';
 import { useIsWindows } from 'System/Status/useSystemStatus';
 import { InputChanged } from 'typings/inputs';
 import translate from 'Utilities/String/translate';
@@ -34,11 +35,13 @@ import styles from './AddNewGameModalContent.css';
 export interface AddNewGameModalContentProps {
   game: AddGame;
   onModalClose: () => void;
+  onGameAdded?: (game: Game) => void;
 }
 
 function AddNewGameModalContent({
   game,
   onModalClose,
+  onGameAdded,
 }: AddNewGameModalContentProps) {
   const { title, year, overview, images, folder } = game;
   const options = useAddGameOptions();
@@ -82,11 +85,23 @@ function AddNewGameModalContent({
 
   useEffect(() => {
     if (wasAdding.current && !isAdding && !addError && addedGame) {
-      history.push(`/game/${addedGame.titleSlug}`);
+      if (onGameAdded) {
+        onGameAdded(addedGame);
+      } else {
+        history.push(`/game/${addedGame.titleSlug}`);
+      }
       onModalClose();
     }
     wasAdding.current = isAdding;
-  }, [isAdding, addError, addedGame, onModalClose, history, wasAdding]);
+  }, [
+    isAdding,
+    addError,
+    addedGame,
+    onGameAdded,
+    onModalClose,
+    history,
+    wasAdding,
+  ]);
 
   const handleInputChange = useCallback(
     ({ name, value }: InputChanged<string | number | boolean | number[]>) => {

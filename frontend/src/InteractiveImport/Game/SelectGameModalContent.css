@@ -13,6 +13,18 @@
   margin-bottom: 20px;
 }
 
+.lookupResults {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  overflow: auto;
+
+  margin-bottom: 12px;
+  max-height: 125px;
+}
+
 .scroller {
   flex: 1 1 auto;
 }

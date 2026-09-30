@@ -35,6 +35,7 @@ function SelectPlatformModalContent(props: SelectPlatformModalContentProps) {
             <SelectPlatformRow
               key={item.platformNumber}
               platformNumber={item.platformNumber}
+              title={item.title}
               onSeasonSelect={onSeasonSelect}
             />
           );
