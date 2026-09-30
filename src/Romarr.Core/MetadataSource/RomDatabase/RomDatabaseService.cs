@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Xml;
 using System.Xml.Linq;
 using NLog;
 using Romarr.Common.Disk;
@@ -83,15 +84,35 @@ namespace Romarr.Core.MetadataSource.RomDatabase
             };
         }
 
-        public void DownloadDatabase(string systemId)
+        public void ImportDatabase(string systemId, Stream stream)
         {
-            // DAT files must be manually placed by the user from:
-            // No-Intro: https://datomatic.no-intro.org/
-            // Redump: http://redump.org/
-            // Romarr will parse XML DAT files in the rom_databases folder
-            _logger.Info("ROM database '{0}' should be placed in: {1}", systemId, _databasePath);
-            _logger.Info("No-Intro DATs: https://datomatic.no-intro.org/");
-            _logger.Info("Redump DATs: http://redump.org/");
+            var path = GetDatFilePath(systemId);
+            var tempPath = Path.Combine(_databasePath, $"{Guid.NewGuid():N}.tmp");
+
+            try
+            {
+                using (var output = File.Create(tempPath))
+                {
+                    stream.CopyTo(output);
+                }
+
+                using var reader = XmlReader.Create(tempPath, new XmlReaderSettings { DtdProcessing = DtdProcessing.Ignore, XmlResolver = null });
+                var document = XDocument.Load(reader);
+
+                if (document.Root?.Name.LocalName != "datafile" || !document.Descendants("game").Any())
+                {
+                    throw new InvalidDataException("File must be a DAT XML file containing games.");
+                }
+
+                File.Move(tempPath, path, true);
+            }
+            finally
+            {
+                if (File.Exists(tempPath))
+                {
+                    File.Delete(tempPath);
+                }
+            }
         }
 
         public RomDatabaseEntry LookupByHash(string systemId, string hash)
@@ -127,6 +148,11 @@ namespace Romarr.Core.MetadataSource.RomDatabase
 
         private string GetDatFilePath(string systemId)
         {
+            if (!AvailableSystems.Any(system => system.Id == systemId))
+            {
+                throw new ArgumentException("Unknown ROM database system", nameof(systemId));
+            }
+
             return Path.Combine(_databasePath, $"{systemId}.dat");
         }
 

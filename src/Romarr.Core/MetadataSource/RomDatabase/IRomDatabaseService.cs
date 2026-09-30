@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 
 namespace Romarr.Core.MetadataSource.RomDatabase
 {
@@ -6,7 +7,7 @@ namespace Romarr.Core.MetadataSource.RomDatabase
     {
         List<RomDatabaseSystem> GetAvailableSystems();
         RomDatabaseStatus GetSystemStatus(string systemId);
-        void DownloadDatabase(string systemId);
+        void ImportDatabase(string systemId, Stream stream);
         RomDatabaseEntry LookupByHash(string systemId, string hash);
         RomDatabaseEntry LookupByName(string systemId, string filename);
     }

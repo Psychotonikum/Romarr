@@ -1,3 +1,4 @@
+using System.Xml;
 using Microsoft.AspNetCore.Mvc;
 using Romarr.Core.MetadataSource.RomDatabase;
 using Romarr.Http;
@@ -28,11 +29,25 @@ namespace Romarr.Api.V5.RomDatabase
             return _romDatabaseService.GetSystemStatus(systemId);
         }
 
-        [HttpPost("systems/{systemId}/download")]
-        public IActionResult DownloadDatabase(string systemId)
+        [HttpPost("systems/{systemId}/import")]
+        [RequestFormLimits(MultipartBodyLengthLimit = 25000000)]
+        public IActionResult ImportDatabase(string systemId)
         {
-            _romDatabaseService.DownloadDatabase(systemId);
-            return Ok(new { message = $"Database info logged. Place DAT files in the rom_databases folder." });
+            if (Request.Form.Files.Count != 1 || Request.Form.Files[0].Length == 0 || Request.Form.Files[0].Length > 25000000)
+            {
+                return BadRequest(new { message = "Provide one DAT file up to 25 MB." });
+            }
+
+            try
+            {
+                using var stream = Request.Form.Files[0].OpenReadStream();
+                _romDatabaseService.ImportDatabase(systemId, stream);
+                return Ok(_romDatabaseService.GetSystemStatus(systemId));
+            }
+            catch (Exception ex) when (ex is InvalidDataException or XmlException or ArgumentException)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpGet("lookup/hash")]
