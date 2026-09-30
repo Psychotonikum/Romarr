@@ -58,14 +58,6 @@ const LINKS: SidebarItem[] = [
         title: () => translate('AddNew'),
         to: '/add/new',
       },
-      {
-        title: () => translate('LibraryImport'),
-        to: '/add/import',
-      },
-      {
-        title: () => 'Game Import',
-        to: '/add/scrape',
-      },
     ],
   },
 

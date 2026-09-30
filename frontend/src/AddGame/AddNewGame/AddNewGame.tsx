@@ -7,7 +7,6 @@ import Link from 'Components/Link/Link';
 import LoadingIndicator from 'Components/Loading/LoadingIndicator';
 import PageContent from 'Components/Page/PageContent';
 import PageContentBody from 'Components/Page/PageContentBody';
-import { useHasSeries } from 'Game/useGame';
 import useDebounce from 'Helpers/Hooks/useDebounce';
 import useQueryParams from 'Helpers/Hooks/useQueryParams';
 import { icons, kinds } from 'Helpers/Props';
@@ -20,7 +19,6 @@ import styles from './AddNewGame.css';
 
 function AddNewGame() {
   const { term: initialTerm = '' } = useQueryParams<{ term: string }>();
-  const hasSeries = useHasSeries();
   const [term, setTerm] = useState(initialTerm);
   const [isFetching, setIsFetching] = useState(false);
   const query = useDebounce(term, term ? 300 : 0);
@@ -115,19 +113,6 @@ function AddNewGame() {
             <div>{translate('SearchByIgdbId')}</div>
           </div>
         )}
-
-        {!term && !hasSeries ? (
-          <div className={styles.message}>
-            <div className={styles.noGameText}>
-              {translate('NoGameHaveBeenAdded')}
-            </div>
-            <div>
-              <Button to="/add/import" kind={kinds.PRIMARY}>
-                {translate('ImportExistingSeries')}
-              </Button>
-            </div>
-          </div>
-        ) : null}
 
         <div />
       </PageContentBody>

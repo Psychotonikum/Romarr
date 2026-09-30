@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import Label from 'Components/Label';
 import IconButton from 'Components/Link/IconButton';
-import Link from 'Components/Link/Link';
 import ConfirmModal from 'Components/Modal/ConfirmModal';
 import TableRowCell from 'Components/Table/Cells/TableRowCell';
 import TableRow from 'Components/Table/TableRow';
@@ -44,13 +43,7 @@ function RootFolderRow(props: RootFolderRowProps) {
     <TableRow>
       <TableRowCell>
         <div className={styles.pathContainer}>
-          {isUnavailable ? (
-            path
-          ) : (
-            <Link className={styles.link} to={`/add/import/${id}`}>
-              {path}
-            </Link>
-          )}
+          {path}
 
           {isUnavailable ? (
             <Label className={styles.label} kind={kinds.DANGER}>

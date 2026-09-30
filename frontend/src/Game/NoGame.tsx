@@ -23,15 +23,7 @@ function NoGame(props: NoGameProps) {
 
   return (
     <div>
-      <div className={styles.message}>
-        {translate('NoGameFoundImportOrAdd')}
-      </div>
-
-      <div className={styles.buttonContainer}>
-        <Button to="/add/import" kind={kinds.PRIMARY}>
-          {translate('ImportExistingSeries')}
-        </Button>
-      </div>
+      <div className={styles.message}>{translate('NoGameHaveBeenAdded')}</div>
 
       <div className={styles.buttonContainer}>
         <Button to="/add/new" kind={kinds.PRIMARY}>
