@@ -170,3 +170,6 @@ src/.idea/
 .env.local
 .env*.local
 _release
+
+# Yarn owns dependency resolution for this project.
+/package-lock.json
